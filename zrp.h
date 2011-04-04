@@ -7,7 +7,7 @@
 #include <zrp/zrp_rqueue.h>
 #include <classifier/classifier-port.h>
 
-class ZRP;
+class ZRP;						// Forward Declaration
 
 /*
  *  The Routing Agent
