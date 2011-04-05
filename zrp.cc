@@ -23,19 +23,52 @@ public:
 	ZRPclass() : TclClass("Agent/ZRP") {}
 
 	TclObject* create(int argc, const char*const* argv) {
-	//	assert(argc == 5); Need some work
+		assert(argc == 5);
+		return (new ZRP((nsaddr_t) Address::instance().str2addr(argv[4])));
 	}
 } class_rtProtoZRP;
 
 int
 ZRP::command(int argc, const char*const* argv) {
+	if (argc == 2) {
+		Tcl& tcl = Tcl::instance();
 
+		if (strncasecmp(argv[1], "id", 2) == 0) {
+			tcl.resultf("%d", index);
+			return TCL_OK;
+		}
+	}
+	return Agent::command(argc, argv);
 }
 
 /*
  * Constructor for ZRP class
  */
-ZRP::ZRP(nsaddr_t id) : Agent(61) {					// Need to assign a number from packet.h
+ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP) {					// Need to assign a number from packet.h
+
 	index = id;
 	seqno = 2;										// From AODV need rationale
 }
+
+/*
+ * Packet Reception Routines
+ */
+
+void
+ZRP::recv(Packet *p,Handler*) {
+	struct hdr_cmn *commonHeader = HDR_CMN(p);
+	struct hdr_ip *ipHeader = HDR_IP(p);
+
+	assert(initialized());
+
+	if (commonHeader->ptype() == PT_ZRP) {
+		ipHeader->ttl_ -= 1;
+		recvZRP(p);
+		return;
+	}
+}
+
+void ZRP::recvZRP(Packet *p) {
+
+}
+

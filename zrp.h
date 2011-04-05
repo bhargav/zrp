@@ -10,12 +10,30 @@
 class ZRP;						// Forward Declaration
 
 /*
- *  The Routing Agent
+ * Zone Management Timer
  */
+
+class ZoneManagementTimer : public Handler {
+public:
+	ZoneManagementTimer(ZRP* a) : agent(a) {}
+	void handle(Event*);
+private:
+	ZRP *agent;
+	Event intr;
+};
+
+/*
+ *  the Routing Agent
+ */
+
 class ZRP: public Agent {
 
-public:
+	friend class ZoneManagementTimer;
 
+public:
+	ZRP(nsaddr_t);
+
+	void recv(Packet *,Handler *);
 protected:
 	int command(int, const char *const*);
 	int initialized() { return 1 && target_; }
@@ -23,6 +41,9 @@ protected:
 	nsaddr_t index;					// IP Address of this node
 	u_int32_t seqno;				// Sequence Number
 
+
+	// Packet Reception Routines
+	void recvZRP(Packet *);
 	/*
 	 * logging the contents of the routing databases
 	 */
