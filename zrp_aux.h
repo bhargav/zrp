@@ -15,4 +15,10 @@ public:
 private:
 	LIST_HEAD(nodelist_head, nodelist_entry) nl_head;
 };
+
+struct	metric			//variable used by a dynamic router to calculate its routing table
+{
+	char 			type;
+	u_int16_t		value;
+};
 #endif
