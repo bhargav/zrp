@@ -12,7 +12,7 @@
 #define CURRENT_TIME		Scheduler::instance().clock()
 #define INFINITY2			0xff
 
-//		IERP Routing Table
+//		Routing Table
 
 
 
