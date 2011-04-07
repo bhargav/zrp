@@ -44,6 +44,9 @@ protected:
 
 	// Packet Reception Routines
 	void recvZRP(Packet *);
+
+	// Bordercast Tree Table
+
 	/*
 	 * logging the contents of the routing databases
 	 */
