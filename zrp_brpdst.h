@@ -13,6 +13,9 @@
 
 #include <zrp/zrp_aux.h>
 
+#define CURRENT_TIME		Scheduler::instance().clock()
+#define INFINITY2			0xff
+
 //		Bordercast Tree table Entry
 
 class zrp_btt_entry {
