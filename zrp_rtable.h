@@ -14,6 +14,34 @@
 
 //		Routing Table
 
+class zrp_rt_entry {
+	friend class zrp_rtable;
+	friend class ZRP;
+
+public:
+	zrp_rt_entry();
+	~zrp_rt_entry();
+
+private:
+
+	ns_addr_t zrp_dst;
+	ns_addr_t zrp_subnet;
+
+	bool zrp_intrazone;
+
+};
+
+//		Bordercast Tree Table
+
+class zrp_rtable {
+public:
+	zrp_rtable() { LIST_INIT(&rthead); }
+
+	zrp_rt_entry*	head() { return rthead.lh_first; }
+private:
+	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
+};
+
 
 
 
