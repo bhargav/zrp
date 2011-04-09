@@ -6,6 +6,7 @@
 #define ZRP_IERPDST_H_
 
 #include <zrp/zrp_rtable.h>
+#include <zrp/zrp_aux.h>
 
 // Temporary Query Cache Entry
 
@@ -18,9 +19,11 @@ public:
 
 protected:
 
+	LIST_ENTRY(query_cache_entry) qc_link;
+
 	ns_addr_t qc_src;			// Query Source
 	u_int16_t query_id;			// Query ID
-	ns_addr_t prev_hop;			// Previous Hop
+	zrp_nodelist prev_hop;			// Previous Hop
 	u_int8_t hop_count;			// Hop count
 	u_int injection_counter;		// Injection counter - don't know use yet
 };

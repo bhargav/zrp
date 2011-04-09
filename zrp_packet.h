@@ -66,7 +66,7 @@ struct hdr_zrp_brp
 	ns_addr_t			src_addr;
 	u_int16_t			msg_id;
 	ns_addr_t			prev;
-	union hdr_all_zrp	packet;		//If any problem , make it struct
+//	union hdr_all_zrp	packet;		//If any problem , make it struct
 };
 
 // for size calculation of header-space reservation
