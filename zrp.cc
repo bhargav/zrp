@@ -70,5 +70,35 @@ ZRP::recv(Packet *p,Handler*) {
 
 void ZRP::recvZRP(Packet *p) {
 
+	struct hdr_aodv *ah = HDR_ZRP(p);
+
+	 assert(HDR_IP (p)->sport() == RT_PORT);
+	 assert(HDR_IP (p)->dport() == RT_PORT);
+
+	 /*
+	  * Incoming Packets.
+	  */
+	 switch(ah->ah_type) {
+
+	 case ZRPTYPE_RREQ:
+	   recvRequest(p);
+	   break;
+
+	 case ZRPTYPE_RREP:
+	   recvReply(p);
+	   break;
+
+	 case ZRPTYPE_REXT:
+	   recvExtension(p);
+	   break;
+
+	 //case AODVTYPE_HELLO:
+	   //recvHello(p);
+	   //break;
+
+	 default:
+	   fprintf(stderr, "Invalid ZRP type (%x)\n", ah->ah_type);
+	   exit(1);
+	 }
 }
 
