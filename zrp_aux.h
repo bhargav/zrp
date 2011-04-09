@@ -6,6 +6,7 @@
 
 class nodelist_entry {
 	friend class ZRP;
+	friend class zrp_rt_entry;
 protected:
 	ns_addr_t node;
 	LIST_ENTRY(nodelist_entry) nl_link;
@@ -24,6 +25,7 @@ private:
 class metric_entry			// variable used by a dynamic router to calculate its routing table
 {
 	friend class ZRP;
+	friend class zrp_rt_entry;
 protected:
 	char 			RESERVED[8];
 	char 			type[8];

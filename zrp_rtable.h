@@ -17,7 +17,6 @@
 class zrp_rt_entry {
 	friend class zrp_rtable;
 	friend class ZRP;
-
 public:
 	zrp_rt_entry();
 	~zrp_rt_entry();
@@ -41,9 +40,9 @@ public:
 	zrp_rtable() { LIST_INIT(&rthead); }
 
 	zrp_rt_entry*	head() { return rthead.lh_first; }
-	zrp_rt_entry* 	rt_add(ns_addr_t);
-	void 			rt_delete(ns_addr_t);
-	zrp_rt_entry*	rt_lookup(ns_addr_t);
+	zrp_rt_entry* 	rt_add(ns_addr_t id);
+	void 			rt_delete(ns_addr_t id);
+	zrp_rt_entry*	rt_lookup(ns_addr_t id);
 private:
 	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 

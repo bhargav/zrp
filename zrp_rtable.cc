@@ -1,12 +1,14 @@
 #include <zrp/zrp_rtable.h>
 
+// Routing Table entry
+
 zrp_rt_entry::zrp_rt_entry()
 {
-	zrp_dst = 0;
-	zrp_subnet = 0;
+//	zrp_dst = 0;
+//	zrp_subnet = 0;
 
 	LIST_INIT(&routes);
-	LIST_INIT(&metric_entry);
+	LIST_INIT(&route_metrics);
 	zrp_intrazone = FALSE;
 }
 
@@ -21,7 +23,7 @@ zrp_rt_entry::~zrp_rt_entry()
 
 	metric_entry *men;
 
-	while((men = zrp_metric_list.lh_first)) {
+	while((men = route_metrics.lh_first)) {
 		LIST_REMOVE(men, metric_link);
 		delete men;
 	}
@@ -29,15 +31,15 @@ zrp_rt_entry::~zrp_rt_entry()
 
 // Routing Table
 
-zrp_rt_entry*
-zrp_rtable::rt_lookup(nsaddr_t id)
+zrp_rt_entry *zrp_rtable::rt_add(ns_addr_t id)
 {
-	zrp_rt_entry *rt = rthead.lh_first;
+	zrp_rt_entry *rt;
 
-	for (; rt ; rt = rt->rt_link.le_next) {
-		if (rt->zrp_dst == id)
-			break;
-	}
+	//assert(rt_lookup(id) == 0)
+	rt = new zrp_rt_entry;
+	assert(rt);
+	rt->zrp_dst = id;
+	LIST_INSERT_HEAD(&rthead, rt, rt_link);
 	return rt;
 }
 
@@ -53,15 +55,13 @@ zrp_rtable::rt_delete(ns_addr_t id)
 
 }
 
-zrp_rt_entry*
-zrp_rtable::rt_add(nsaddr_t id)
+zrp_rt_entry *zrp_rtable::rt_lookup(ns_addr_t id)
 {
-	zrp_rt_entry *rt;
+	zrp_rt_entry *rt = rthead.lh_first;
 
-	//assert(rt_lookup(id) == 0)
-	rt = new zrp_rt_entry;
-	assert(rt);
-	rt->zrp_dst = id;
-	LIST_INSERT_HEAD(&rthead, rt, rt_link);
+	for (; rt ; rt = rt->rt_link.le_next) {
+		if (rt->zrp_dst.isEqual(id))
+			break;
+	}
 	return rt;
 }
