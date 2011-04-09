@@ -55,9 +55,9 @@ struct hdr_zrp_inter
 	u_int8_t		num_nodes;
 	u_int8_t		q_id;
 	ns_addr_t		lk_src_addr;
-	//Query Destination address ??
-	//Route??
-	//Metric??
+	zrp_nodelist    query_dst;
+	zrp_nodelist	route;
+	zrp_metric_list metric;
 };
 
 struct hdr_zrp_brp

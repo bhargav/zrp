@@ -43,6 +43,7 @@ public:
 	zrp_rt_entry* 	rt_add(ns_addr_t id);
 	void 			rt_delete(ns_addr_t id);
 	zrp_rt_entry*	rt_lookup(ns_addr_t id);
+	bool		    rt_isIntra(ns_addr_t id);
 private:
 	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 

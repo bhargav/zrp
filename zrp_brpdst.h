@@ -27,12 +27,13 @@ public:
 	~zrp_btt_entry();
 
 private:
+	LIST_ENTRY(zrp_btt_entry) btt_link;
 
 	ns_addr_t node_id;
 	bool member;
 
-	LIST_ENTRY(nodelist_entry) dwnstrm_n;				 // Downstream Neighbor List
-	LIST_ENTRY(nodelist_entry) dwnstrm_pnodes;			//  Downstream Peripheral Nodes List
+	zrp_nodelist dwnstrm_n;				 // Downstream Neighbor List
+	zrp_nodelist dwnstrm_pnodes;			//  Downstream Peripheral Nodes List
 };
 
 //		Bordercast Tree Table

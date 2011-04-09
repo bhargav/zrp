@@ -14,14 +14,6 @@ protected:
 
 LIST_HEAD(zrp_nodelist, nodelist_entry);
 
-class nodelist {
-public:
-	nodelist() { LIST_INIT(&nl_head); }
-
-private:
-	LIST_HEAD(nodelist_head, nodelist_entry) nl_head;
-};
-
 class metric_entry			// variable used by a dynamic router to calculate its routing table
 {
 	friend class ZRP;

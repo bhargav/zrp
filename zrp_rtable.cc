@@ -65,3 +65,16 @@ zrp_rt_entry *zrp_rtable::rt_lookup(ns_addr_t id)
 	}
 	return rt;
 }
+
+bool zrp_rtable::rt_isIntra(ns_addr_t id)
+{
+	zrp_rt_entry *rt = rthead.lh_first;
+
+	for (; rt ; rt = rt->rt_link.le_next) {
+		if (rt->zrp_dst.isEqual(id))
+			return rt->zrp_intrazone;
+	}
+	return FALSE;
+}
+
+
