@@ -5,7 +5,11 @@
 
 // Packet Formats 
 
-#define ZRPTYPE_HELLO 0x01
+#define ZRPTYPE_HELLO 	0x01
+#define ZRPTYPE_RREQ   	0x02
+#define ZRPTYPE_RREP   	0x04
+#define ZRPTYPE_REXT   	0x08
+
 
 //Header Macros
 
@@ -46,7 +50,9 @@ struct hdr_zrp_inter
 	u_int8_t		ttl;
 	u_int8_t		h_count;
 	bool			flags[8];
-	u_int8_t		nodes;
+	u_int16_t       curr_hop_ptr;
+	u_int8_t		num_dest;
+	u_int8_t		num_nodes;
 	u_int8_t		q_id;
 	ns_addr_t		lk_src_addr;
 	//Query Destination address ??
@@ -66,9 +72,9 @@ struct hdr_zrp_brp
 // for size calculation of header-space reservation
 union hdr_all_zrp
 {
-	hdr_zrp 			ah;
-	hdr_zrp_intra 		intra;
-	hdr_zrp_inter		inter;
-	hdr_zrp_brp			brp;
+	hdr_zrp 					ah;
+	hdr_zrp_intra_linkst 		intra;
+	hdr_zrp_inter				inter;
+	hdr_zrp_brp					brp;
 };
 #endif /* __zrp_packet_h__ */
