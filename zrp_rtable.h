@@ -12,7 +12,7 @@
 #define CURRENT_TIME		Scheduler::instance().clock()
 #define INFINITY2			0xff
 
-//		Routing Table
+//		Routing Table Entry
 
 class zrp_rt_entry {
 	friend class zrp_rtable;
@@ -24,22 +24,29 @@ public:
 
 private:
 
+	LIST_ENTRY(zrp_rt_entry) rt_link;
+
 	ns_addr_t zrp_dst;
 	ns_addr_t zrp_subnet;
-
+	zrp_nodelist routes;
+	zrp_metric_list route_metrics;
 	bool zrp_intrazone;
 
 };
 
-//		Bordercast Tree Table
+//		Routing Table
 
 class zrp_rtable {
 public:
 	zrp_rtable() { LIST_INIT(&rthead); }
 
 	zrp_rt_entry*	head() { return rthead.lh_first; }
+	zrp_rt_entry* 	rt_add(ns_addr_t);
+	void 			rt_delete(ns_addr_t);
+	zrp_rt_entry*	rt_lookup(ns_addr_t);
 private:
 	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
+
 };
 
 

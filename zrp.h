@@ -27,7 +27,7 @@ private:
  */
 
 class ZRP: public Agent {
-
+	friend class zrp_rt_entry;
 	friend class ZoneManagementTimer;
 
 public:
@@ -44,6 +44,9 @@ protected:
 
 	// Packet Reception Routines
 	void recvZRP(Packet *);
+
+	// Routing Table
+	zrp_rtable rthead;				// Routing Table
 
 	// Bordercast Tree Table
 
