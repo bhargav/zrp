@@ -102,21 +102,11 @@ void ZRP::recvZRP(Packet *p) {
 	}
 }
 
-void ZRP::recvReply(Packet *p) {
+		void ZRP::recvReply(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 
 #ifdef DEBUG
 	fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
-#endif
-
-}
-
-void ZRP::recvRequest(Packet *p) {
-	struct hdr_cmn *ch = HDR_CMN(p);
-	struct hdr_ip *ip = HDR_IP(p);
-
-#ifdef DEBUG
-	fprintf(stderr, "%d - %s: received a REQUEST\n", index, __FUNCTION__);
 #endif
 
 }
@@ -129,4 +119,18 @@ void ZRP::recvExtension(Packet *p) {
 	fprintf(stderr, "%d - %s: received a QUERY EXTENSION\n", index, __FUNCTION__);
 #endif
 
-}
+	void ZRP::recvRequest(Packet *p)
+	{
+		struct hdr_ip *ih =  HDR_IP(p);
+		struct hdr_zrp_inter *rq = HDR_ZRP_INTER(p);
+		zrp_rt_entry *rt;
+
+		// Drop, if i am source.
+		if(rq->rq_src == index) {
+#ifdef DEBUG
+			fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
+#endif // DEBUG
+			Packet::free(p);
+			return;
+		}
+	}
