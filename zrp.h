@@ -44,7 +44,7 @@ protected:
 
 	// Packet Reception Routines
 	void recvZRP(Packet *);
-
+	void recvRequest(Packet *);
 	// Routing Table
 	zrp_rtable rthead;				// Routing Table
 

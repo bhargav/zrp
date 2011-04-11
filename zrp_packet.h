@@ -13,7 +13,10 @@
 
 //Header Macros
 
-#define HDR_ZRP(p) 	((struct hdr_zrp*)hdr_zrp::access(p))
+#define HDR_ZRP(p) 					((struct hdr_zrp*)hdr_zrp::access(p))
+#define HDR_ZRP_INTRA_LINKST(p)  	((struct hdr_zrp_intra_linkst*)hdr_zrp::access(p))
+#define HDR_ZRP_INTER(p)  			((struct hdr_zrp_inter*)hdr_zrp::access(p))
+#define HDR_ZRP_BRP(p)				((struct hdr_zrp_brp*)hdr_zrp::access(p))
 
 
 struct hdr_zrp

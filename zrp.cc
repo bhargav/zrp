@@ -102,3 +102,20 @@ void ZRP::recvZRP(Packet *p) {
 	 }
 }
 
+void ZRP::recvRequest(Packet *p)
+{
+	struct hdr_ip *ih =  HDR_IP(p);
+    struct hdr_zrp_inter *rq = HDR_ZRP_INTER(p);
+    zrp_rt_entry *rt;
+
+    // Drop, if i am source.
+    if(rq->rq_src == index) {
+    #ifdef DEBUG
+        fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
+    #endif // DEBUG
+        Packet::free(p);
+        return;
+      }
+
+
+}
