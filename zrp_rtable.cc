@@ -14,7 +14,7 @@ zrp_rt_entry::zrp_rt_entry()
 
 zrp_rt_entry::~zrp_rt_entry()
 {
-	nodelist_entry *nlen;
+	zrp_nodelist_entry *nlen;
 
 	while((nlen = routes.lh_first)) {
 		LIST_REMOVE(nlen, nl_link);

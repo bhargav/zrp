@@ -23,7 +23,7 @@ protected:
 
 	ns_addr_t qc_src;			// Query Source
 	u_int16_t query_id;			// Query ID
-	zrp_nodelist prev_hop;			// Previous Hop
+	zrp_node_list prev_hop;			// Previous Hop
 	u_int8_t hop_count;			// Hop count
 	u_int injection_counter;		// Injection counter - don't know use yet
 };

@@ -27,7 +27,7 @@ private:
 
 	ns_addr_t zrp_dst;
 	ns_addr_t zrp_subnet;
-	zrp_nodelist routes;
+	zrp_node_list routes;
 	zrp_metric_list route_metrics;
 	bool zrp_intrazone;
 

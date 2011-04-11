@@ -81,7 +81,7 @@ void ZRP::recvZRP(Packet *p) {
 	switch(ah->ah_type) {
 
 	case ZRPTYPE_RREQ:
-//		recvRequest(p);
+		recvRequest(p);
 		break;
 
 	case ZRPTYPE_RREP:
@@ -89,10 +89,10 @@ void ZRP::recvZRP(Packet *p) {
 		break;
 
 	case ZRPTYPE_REXT:
-//		recvExtension(p);
+		recvExtension(p);
 		break;
 
-		//case AODVTYPE_HELLO:
+		//case AODVTYPE_HELLO:			//Check if we need Hello packets for NDM
 		//recvHello(p);
 		//break;
 
@@ -104,26 +104,41 @@ void ZRP::recvZRP(Packet *p) {
 
 void ZRP::recvReply(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
-//	struct hrd_ip *ih = HDR_IP(p);
-//	struct hdr_zrp_inter *rp = HDR_
-//	zrp_rt_entry *rt;
+	struct hrd_ip *ih = HDR_IP(p);
+	//	struct hdr_zrp_inter *rp = HDR_
+	//	zrp_rt_entry *rt;
 
 #ifdef DEBUG
-	 fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
+	fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
 #endif
 
-	 // rp_dst is the dest of the data packets
-//	 rt = rtable.rt_lookup(rp->rp_dst);
-//
-//	 if(rt == 0) {
-//		 rt = rtable.rt_add(rp->rp_dst);
-//	 }
+	// rp_dst is the dest of the data packets
+	//	 rt = rtable.rt_lookup(rp->rp_dst);
+	//
+	//	 if(rt == 0) {
+	//		 rt = rtable.rt_add(rp->rp_dst);
+	//	 }
 }
 
 void ZRP::recvRequest(Packet *p) {
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ip = HDR_IP(p);
+
+#ifdef DEBUG
+	fprintf(stderr, "%d - %s: received a REQUEST\n", index, __FUNCTION__);
+#endif
+
+
 
 }
 
 void ZRP::recvExtension(Packet *p) {
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ip = HDR_IP(p);
+
+#ifdef DEBUG
+	fprintf(stderr, "%d - %s: received a QUERY EXTENSION\n", index, __FUNCTION__);
+#endif
+
 
 }
