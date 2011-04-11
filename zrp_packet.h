@@ -20,8 +20,7 @@
 struct hdr_zrp
 { 
 	u_int8_t        ah_type;
-	
-	
+
 	// Header access methods
 	static int offset_; // required by PacketHeaderManager
 	inline static int& offset() { return offset_; }
@@ -56,8 +55,9 @@ struct hdr_zrp_inter
 	u_int8_t		num_nodes;
 	u_int8_t		q_id;
 	ns_addr_t		lk_src_addr;
-//	zrp_nodelist    query_dst;
-	ns_addr_t		query_dst;
+//	zrp_node_list	query_dst;
+//	zrp_node_list	route;
+	zrp_nodelist	query_dst;
 	zrp_nodelist	route;
 	zrp_metric_list metric;
 };
@@ -68,7 +68,7 @@ struct hdr_zrp_brp
 	ns_addr_t			src_addr;
 	u_int16_t			msg_id;
 	ns_addr_t			prev;
-//	union hdr_all_zrp	packet;		//If any problem , make it struct
+	//	union hdr_all_zrp	packet;		//If any problem , make it struct
 };
 
 // for size calculation of header-space reservation
@@ -79,4 +79,5 @@ union hdr_all_zrp
 	hdr_zrp_inter				inter;
 	hdr_zrp_brp					brp;
 };
+
 #endif /* __zrp_packet_h__ */

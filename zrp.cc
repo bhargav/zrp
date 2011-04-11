@@ -45,7 +45,7 @@ ZRP::command(int argc, const char*const* argv) {
  * Constructor for ZRP class
  */
 ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP) {					// Need to assign a number from packet.h
-
+	//	bind_bool("accessible_var_", &accessible_var_);
 	index = id;
 	seqno = 2;										// From AODV need rationale
 }
@@ -92,9 +92,9 @@ void ZRP::recvZRP(Packet *p) {
 		recvExtension(p);
 		break;
 
-		//case AODVTYPE_HELLO:			//Check if we need Hello packets for NDM
-		//recvHello(p);
-		//break;
+		//		case ZRPTYPE_HELLO:			//Check if we need Hello packets for NDM
+		//		recvHello(p);
+		//		break;
 
 	default:
 		fprintf(stderr, "Invalid ZRP type (%x)\n", ah->ah_type);
@@ -104,20 +104,11 @@ void ZRP::recvZRP(Packet *p) {
 
 void ZRP::recvReply(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
-	struct hrd_ip *ih = HDR_IP(p);
-	//	struct hdr_zrp_inter *rp = HDR_
-	//	zrp_rt_entry *rt;
 
 #ifdef DEBUG
 	fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
 #endif
 
-	// rp_dst is the dest of the data packets
-	//	 rt = rtable.rt_lookup(rp->rp_dst);
-	//
-	//	 if(rt == 0) {
-	//		 rt = rtable.rt_add(rp->rp_dst);
-	//	 }
 }
 
 void ZRP::recvRequest(Packet *p) {
@@ -128,8 +119,6 @@ void ZRP::recvRequest(Packet *p) {
 	fprintf(stderr, "%d - %s: received a REQUEST\n", index, __FUNCTION__);
 #endif
 
-
-
 }
 
 void ZRP::recvExtension(Packet *p) {
@@ -139,6 +128,5 @@ void ZRP::recvExtension(Packet *p) {
 #ifdef DEBUG
 	fprintf(stderr, "%d - %s: received a QUERY EXTENSION\n", index, __FUNCTION__);
 #endif
-
 
 }
