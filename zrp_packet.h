@@ -36,9 +36,9 @@ struct hdr_zrp
 struct hdr_zrp_intra_linkst
 {
 	u_int8_t 		intra_type;			//Intra Type
-	ns_addr_t 		lk_src_addr;		//Link Source Address
-	ns_addr_t 		lk_dest_addr;		//Link Destination Address
-	ns_addr_t		pkt_src_addr;		//Address of the node that sent the packet
+	nsaddr_t 		lk_src_addr;		//Link Source Address
+	nsaddr_t 		lk_dest_addr;		//Link Destination Address
+	nsaddr_t		pkt_src_addr;		//Address of the node that sent the packet
 	u_int16_t		state_id;			//Sequence Number
 	u_int8_t 		zone_radius;		//Zone Radius
 	bool 			flags[8];			//Full Link information
@@ -57,10 +57,11 @@ struct hdr_zrp_inter
 	u_int8_t		num_dest;
 	u_int8_t		num_nodes;
 	u_int8_t		q_id;
-	ns_addr_t		lk_src_addr;
+	nsaddr_t		lk_src_addr;
 //	zrp_node_list	query_dst;
 //	zrp_node_list	route;
-	zrp_nodelist	query_dst;
+//	zrp_nodelist	query_dst;
+	nsaddr_t		query_dst;
 	zrp_nodelist	route;
 	zrp_metric_list metric;
 };
@@ -68,19 +69,19 @@ struct hdr_zrp_inter
 struct hdr_zrp_brp
 {
 	u_int8_t			brp_type;
-	ns_addr_t			src_addr;
+	nsaddr_t			src_addr;
 	u_int16_t			msg_id;
-	ns_addr_t			prev;
+	nsaddr_t			prev;
 	//	union hdr_all_zrp	packet;		//If any problem , make it struct
 };
 
 // for size calculation of header-space reservation
-union hdr_all_zrp
-{
-	hdr_zrp 					ah;
-	hdr_zrp_intra_linkst 		intra;
-	hdr_zrp_inter				inter;
-	hdr_zrp_brp					brp;
-};
+//union hdr_all_zrp
+//{
+//	hdr_zrp 					ah;
+//	hdr_zrp_intra_linkst 		intra;
+//	hdr_zrp_inter				inter;
+//	hdr_zrp_brp					brp;
+//};
 
 #endif /* __zrp_packet_h__ */
