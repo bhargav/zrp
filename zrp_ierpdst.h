@@ -21,7 +21,7 @@ protected:
 
 	LIST_ENTRY(query_cache_entry) qc_link;
 
-	ns_addr_t qc_src;			// Query Source
+	nsaddr_t qc_src;			// Query Source
 	u_int16_t query_id;			// Query ID
 	zrp_node_list prev_hop;			// Previous Hop
 	u_int8_t hop_count;			// Hop count

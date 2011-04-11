@@ -12,6 +12,20 @@ class ZRP;						// Forward Declaration
 /*
  * Zone Management Timer
  */
+#define HELLO_INTERVAL          1               // 1000 ms
+#define ALLOWED_HELLO_LOSS      3               // packets
+#define BAD_LINK_LIFETIME       3               // 3000 ms
+#define MaxHelloInterval        (1.25 * HELLO_INTERVAL)
+#define MinHelloInterval        (0.75 * HELLO_INTERVAL)
+
+class ZrpHelloTimer : public Handler {
+public:
+	ZrpHelloTimer(ZRP* a) : agent(a) {}
+	void	handle(Event*);
+private:
+	ZRP    *agent;
+	Event	intr;
+};
 
 class ZoneManagementTimer : public Handler {
 public:
@@ -29,6 +43,7 @@ private:
 class ZRP: public Agent {
 	friend class zrp_rt_entry;
 	friend class ZoneManagementTimer;
+	friend class ZrpHelloTimer;
 
 public:
 	ZRP(nsaddr_t);
@@ -42,7 +57,11 @@ protected:
 	u_int32_t seqno;				// Sequence Number
 
 
-	//
+	// Packet Transmission Routines
+	void 	forward(zrp_rt_entry*, Packet*, double);
+	void	sendQuery(nsaddr_t);
+	void	sendHello();
+
 	// Packet Reception Routines
 	void 	recvZRP(Packet *p);
 	void 	recvReply(Packet *p);
@@ -53,6 +72,9 @@ protected:
 	zrp_rtable rtable;				// Routing Table
 
 	// Bordercast Tree Table
+
+	// Timer Management
+	ZrpHelloTimer      htimer;
 
 	/*
 	 * logging the contents of the routing databases

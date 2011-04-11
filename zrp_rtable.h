@@ -25,8 +25,8 @@ private:
 
 	LIST_ENTRY(zrp_rt_entry) rt_link;
 
-	ns_addr_t zrp_dst;
-	ns_addr_t zrp_subnet;
+	nsaddr_t zrp_dst;
+	nsaddr_t zrp_subnet;
 	zrp_node_list routes;
 	zrp_metric_list route_metrics;
 	bool zrp_intrazone;
@@ -40,10 +40,10 @@ public:
 	zrp_rtable() { LIST_INIT(&rthead); }
 
 	zrp_rt_entry*	head() { return rthead.lh_first; }
-	zrp_rt_entry* 	rt_add(ns_addr_t id);
-	void 			rt_delete(ns_addr_t id);
-	zrp_rt_entry*	rt_lookup(ns_addr_t id);
-	bool		    rt_isIntra(ns_addr_t id);
+	zrp_rt_entry* 	rt_add(nsaddr_t id);
+	void 			rt_delete(nsaddr_t id);
+	zrp_rt_entry*	rt_lookup(nsaddr_t id);
+	bool		    rt_isIntra(nsaddr_t id);
 private:
 	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 

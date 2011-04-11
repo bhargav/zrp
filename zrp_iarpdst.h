@@ -22,7 +22,7 @@ public:
 
 protected:
 
-	ns_addr_t link_src;
+	nsaddr_t link_src;
 	int  zone_radius;
 	int lst_id;
 	zrp_ls_info ls_info;
