@@ -2,6 +2,7 @@
 #ifndef __zrp_packet_h__
 #define __zrp_packet_h__
 
+#include <zrp/zrp_aux.h>
 
 // Packet Formats 
 

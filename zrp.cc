@@ -70,7 +70,7 @@ ZRP::recv(Packet *p,Handler*) {
 
 void ZRP::recvZRP(Packet *p) {
 
-	struct hdr_aodv *ah = HDR_ZRP(p);
+	struct hdr_zrp *ah = HDR_ZRP(p);
 
 	assert(HDR_IP (p)->sport() == RT_PORT);
 	assert(HDR_IP (p)->dport() == RT_PORT);
@@ -81,7 +81,7 @@ void ZRP::recvZRP(Packet *p) {
 	switch(ah->ah_type) {
 
 	case ZRPTYPE_RREQ:
-		recvRequest(p);
+//		recvRequest(p);
 		break;
 
 	case ZRPTYPE_RREP:
@@ -89,7 +89,7 @@ void ZRP::recvZRP(Packet *p) {
 		break;
 
 	case ZRPTYPE_REXT:
-		recvExtension(p);
+//		recvExtension(p);
 		break;
 
 		//case AODVTYPE_HELLO:
@@ -104,18 +104,26 @@ void ZRP::recvZRP(Packet *p) {
 
 void ZRP::recvReply(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
-	struct hrd_ip *ih = HDR_IP(p);
+//	struct hrd_ip *ih = HDR_IP(p);
 //	struct hdr_zrp_inter *rp = HDR_
-	aodv_rt_entry *rt;
+//	zrp_rt_entry *rt;
 
 #ifdef DEBUG
 	 fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
 #endif
 
 	 // rp_dst is the dest of the data packets
-	 rt = rtable.rt_lookup(rp->rp_dst);
+//	 rt = rtable.rt_lookup(rp->rp_dst);
+//
+//	 if(rt == 0) {
+//		 rt = rtable.rt_add(rp->rp_dst);
+//	 }
+}
 
-	 if(rt == 0) {
-		 rt = rtable.rt_add(rp->rp_dst);
-	 }
+void ZRP::recvRequest(Packet *p) {
+
+}
+
+void ZRP::recvExtension(Packet *p) {
+
 }

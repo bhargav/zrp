@@ -44,8 +44,10 @@ protected:
 
 	//
 	// Packet Reception Routines
-	void 	recvZRP(Packet *);
-	void 	recvReply(Packet *);
+	void 	recvZRP(Packet *p);
+	void 	recvReply(Packet *p);
+	void	recvRequest(Packet *p);
+	void 	recvExtension(Packet *p);
 
 	// Routing Table
 	zrp_rtable rtable;				// Routing Table
