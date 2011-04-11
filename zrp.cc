@@ -81,7 +81,7 @@ void ZRP::recvZRP(Packet *p) {
 	switch(ah->ah_type) {
 
 	case ZRPTYPE_RREQ:
-		recvRequest(p);
+		recvQuery(p);
 		break;
 
 	case ZRPTYPE_RREP:
@@ -102,7 +102,7 @@ void ZRP::recvZRP(Packet *p) {
 	}
 }
 
-		void ZRP::recvReply(Packet *p) {
+void ZRP::recvReply(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 
 #ifdef DEBUG
@@ -118,19 +118,32 @@ void ZRP::recvExtension(Packet *p) {
 #ifdef DEBUG
 	fprintf(stderr, "%d - %s: received a QUERY EXTENSION\n", index, __FUNCTION__);
 #endif
+}
 
-	void ZRP::recvRequest(Packet *p)
-	{
-		struct hdr_ip *ih =  HDR_IP(p);
-		struct hdr_zrp_inter *rq = HDR_ZRP_INTER(p);
-		zrp_rt_entry *rt;
+void ZRP::recvQuery(Packet *p)
+{
+	struct hdr_ip *ih =  HDR_IP(p);
+	struct hdr_zrp_inter *rq = HDR_ZRP_INTER(p);
+	zrp_rt_entry *rt;
 
-		// Drop, if i am source.
-		if(rq->rq_src == index) {
+	// Drop, if i am source.
+	if(rq->rq_src == index) {
 #ifdef DEBUG
-			fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
+		fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
 #endif // DEBUG
-			Packet::free(p);
-			return;
-		}
+		Packet::free(p);
+		return;
 	}
+
+	/*The packet's accumulated route information is recorded in X's Routing Table and Temporary Query Cache.
+	  The accumulated route is replaced by X's address and any accumulated route metrics are updated and compressed*/
+
+	/*If Destination lies in Routing zone of X (check it using rt_isIntra(ns_addr_t id)) ,
+	  then we need to generate ROUTE_REPLY and ROUTE_EXTENSION. */
+
+	/*If destination is not in X's routing zone, then Route_Query is forwarded to BRP. */
+
+
+
+}
+
