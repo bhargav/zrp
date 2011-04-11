@@ -75,13 +75,13 @@ ZRP::command(int argc, const char*const* argv) {
 		//	      if (stat != TCL_OK) return stat;
 		//	      return Agent::command(argc, argv);
 		//	    }
-//		else if(strcmp(argv[1], "if-queue") == 0) {
-			//	    ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
+		//		else if(strcmp(argv[1], "if-queue") == 0) {
+		//	    ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
 
-			//	      if(ifqueue == 0)
-			//		return TCL_ERROR;
-//			return TCL_OK;
-//		}
+		//	      if(ifqueue == 0)
+		//		return TCL_ERROR;
+		//			return TCL_OK;
+		//		}
 		else if (strcmp(argv[1], "port-dmux") == 0) {
 			dmux_ = (PortClassifier *)TclObject::lookup(argv[2]);
 			if (dmux_ == 0) {
@@ -252,6 +252,40 @@ ZRP::forward(zrp_rt_entry *rt, Packet *p, double delay) {
 }
 
 void
+ZRP::sendHello() {
+	Packet *p = Packet::alloc();
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp_inter *rh = HDR_ZRP_INTER(p);
+
+#ifdef DEBUG
+	fprintf(stderr, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
+#endif // DEBUGabout
+
+	rh->inter_type = ZRPTYPE_HELLO;
+	rh->h_count = 1;
+	rh->query_dst = index;
+	rh->q_id = seqno;
+
+	// ch->uid() = 0;
+	ch->ptype() = PT_ZRP;
+	ch->size() = IP_HDR_LEN + sizeof(hdr_zrp_inter);
+	ch->iface() = -2;
+	ch->error() = 0;
+	ch->addr_type() = NS_AF_NONE;
+	ch->prev_hop_ = index;          // AODV hack
+
+	ih->saddr() = index;
+	ih->daddr() = IP_BROADCAST;
+	ih->sport() = RT_PORT;
+	ih->dport() = RT_PORT;
+	ih->ttl_ = 1;
+
+	Scheduler::instance().schedule(target_, p, 0.0);
+}
+
+
+void
 ZRP::sendQuery(nsaddr_t dst) {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
@@ -289,35 +323,85 @@ ZRP::sendQuery(nsaddr_t dst) {
 	Scheduler::instance().schedule(target_, p, 0.);
 }
 
+
 void
-ZRP::sendHello() {
+ZRP::sendReply(nsaddr_t ipdst , u_int32_t hop_count, nsaddr_t
+		rpdst, u_int32_t rpseq, u_int32_t lifetime , double
+		timestamp)
+{
+	Packet *p = Packet::alloc();
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ih =HDR_IP(p);
+	struct hdr_zrp_inter *rp = HDR_ZRP_INTER(p);
+	zrp_rt_entry *rt =rtable.rt_lookup(dst);
+
+
+#ifdef DEBUG
+	fprintf(stderr, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
+#endif // DEBUG
+
+	assert(rt);
+
+	rp->inter_type = ZRPTYPE_RREP;
+	rp->h_count = hop_count;
+	//dest??
+	//Sequence number??
+	rp->lk_src_addr = index;
+
+	ch->ptype() = PT_ZRP;
+	ch->size() = IP_HDR_LEN + sizeof(struct hdr_zrp_inter);
+	ch->iface() = -2;
+	ch->error() = 0;
+	ch->addr_type() = NS_AF_INET;
+	ch->next_hop = rt->rt_nexthop;
+	ch->prev_hop = index;
+	ch->direction() = hdr_cmn::DOWN;
+
+	ih->saddr() = index;
+	ih->daddr() = ipdst;
+	ih->sport() = RT_PORT;
+	ih->dport() = RT_PORT;
+	//ttl??
+
+	Scheduler::instance().schedule(target_, p, 0.);
+
+}
+
+void
+ZRP::sendQueryExt(nsaddr_t dst) {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
-	struct hdr_zrp_inter *rh = HDR_ZRP_INTER(p);
+	struct hdr_zrp_inter *rqh = HDR_ZRP_INTER(p);
+	zrp_rt_entry *rt = rtable.rt_lookup(dst);
+
+	// No RTF_UP
+	// No rt_req_timeout
 
 #ifdef DEBUG
-	fprintf(stderr, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
+	fprintf(stderr, "(%2d) - %2d sending Query Extension, dst: %d\n",
+			++route_request, index, rt->rt_dst);
 #endif // DEBUG
 
-	rh->inter_type = ZRPTYPE_HELLO;
-	rh->h_count = 1;
-	rh->query_dst = index;
-	rh->q_id = seqno;
+	// No checking for request count
 
-	// ch->uid() = 0;
 	ch->ptype() = PT_ZRP;
-	ch->size() = IP_HDR_LEN + sizeof(hdr_zrp_inter);
+	ch->size() = IP_HDR_LEN + sizeof(struct hdr_zrp_inter);
 	ch->iface() = -2;
 	ch->error() = 0;
 	ch->addr_type() = NS_AF_NONE;
-	ch->prev_hop_ = index;          // AODV hack
+	ch->prev_hop_ = index;
 
 	ih->saddr() = index;
 	ih->daddr() = IP_BROADCAST;
-	ih->sport() = RT_PORT;
+	ih->saddr() = RT_PORT;
 	ih->dport() = RT_PORT;
-	ih->ttl_ = 1;
 
-	Scheduler::instance().schedule(target_, p, 0.0);
+	rqh->lk_src_addr = index;
+	rqh->inter_type = ZRPTYPE_REXT;
+	rqh->h_count = 1;
+	rqh->curr_hop_ptr = 1;
+
+	Scheduler::instance().schedule(target_, p, 0.);
 }
+
