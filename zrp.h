@@ -42,11 +42,13 @@ protected:
 	u_int32_t seqno;				// Sequence Number
 
 
+	//
 	// Packet Reception Routines
-	void recvZRP(Packet *);
+	void 	recvZRP(Packet *);
+	void 	recvReply(Packet *);
 
 	// Routing Table
-	zrp_rtable rthead;				// Routing Table
+	zrp_rtable rtable;				// Routing Table
 
 	// Bordercast Tree Table
 

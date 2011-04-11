@@ -14,7 +14,7 @@ int hdr_zrp::offset_;
 static class ZRPHeaderClass : public PacketHeaderClass {
 public:
 	ZRPHeaderClass() : PacketHeaderClass("PacketHeader/ZRP",sizeof(hdr_all_zrp)) {
-		  bind_offset(&hdr_zrp::offset_);
+		bind_offset(&hdr_zrp::offset_);
 	}
 } class_rtProtoZRP_hdr;
 
@@ -72,33 +72,50 @@ void ZRP::recvZRP(Packet *p) {
 
 	struct hdr_aodv *ah = HDR_ZRP(p);
 
-	 assert(HDR_IP (p)->sport() == RT_PORT);
-	 assert(HDR_IP (p)->dport() == RT_PORT);
+	assert(HDR_IP (p)->sport() == RT_PORT);
+	assert(HDR_IP (p)->dport() == RT_PORT);
 
-	 /*
-	  * Incoming Packets.
-	  */
-	 switch(ah->ah_type) {
+	/*
+	 * Incoming Packets.
+	 */
+	switch(ah->ah_type) {
 
-	 case ZRPTYPE_RREQ:
-	   recvRequest(p);
-	   break;
+	case ZRPTYPE_RREQ:
+		recvRequest(p);
+		break;
 
-	 case ZRPTYPE_RREP:
-	   recvReply(p);
-	   break;
+	case ZRPTYPE_RREP:
+		recvReply(p);
+		break;
 
-	 case ZRPTYPE_REXT:
-	   recvExtension(p);
-	   break;
+	case ZRPTYPE_REXT:
+		recvExtension(p);
+		break;
 
-	 //case AODVTYPE_HELLO:
-	   //recvHello(p);
-	   //break;
+		//case AODVTYPE_HELLO:
+		//recvHello(p);
+		//break;
 
-	 default:
-	   fprintf(stderr, "Invalid ZRP type (%x)\n", ah->ah_type);
-	   exit(1);
-	 }
+	default:
+		fprintf(stderr, "Invalid ZRP type (%x)\n", ah->ah_type);
+		exit(1);
+	}
 }
 
+void ZRP::recvReply(Packet *p) {
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hrd_ip *ih = HDR_IP(p);
+//	struct hdr_zrp_inter *rp = HDR_
+	aodv_rt_entry *rt;
+
+#ifdef DEBUG
+	 fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
+#endif
+
+	 // rp_dst is the dest of the data packets
+	 rt = rtable.rt_lookup(rp->rp_dst);
+
+	 if(rt == 0) {
+		 rt = rtable.rt_add(rp->rp_dst);
+	 }
+}

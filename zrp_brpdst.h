@@ -32,7 +32,7 @@ private:
 	ns_addr_t node_id;
 	bool member;
 
-	zrp_nodelist dwnstrm_n;				 // Downstream Neighbor List
+	zrp_nodelist dwnstrm_n;				    // Downstream Neighbor List
 	zrp_nodelist dwnstrm_pnodes;			//  Downstream Peripheral Nodes List
 };
 
