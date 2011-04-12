@@ -30,14 +30,6 @@ public:
 
 int
 ZRP::command(int argc, const char*const* argv) {
-	//	if (argc == 2) {
-	//		Tcl& tcl = Tcl::instance();
-	//
-	//		if (strncasecmp(argv[1], "id", 2) == 0) {
-	//			tcl.resultf("%d", index);
-	//			return TCL_OK;
-	//		}
-	//	}
 	if(argc == 2) {
 		Tcl& tcl = Tcl::instance();
 
@@ -75,13 +67,13 @@ ZRP::command(int argc, const char*const* argv) {
 		//	      if (stat != TCL_OK) return stat;
 		//	      return Agent::command(argc, argv);
 		//	    }
-				else if(strcmp(argv[1], "if-queue") == 0) {
-			    ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
+		else if(strcmp(argv[1], "if-queue") == 0) {
+			ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
 
-			      if(ifqueue == 0)
+			if(ifqueue == 0)
 				return TCL_ERROR;
-					return TCL_OK;
-				}
+			return TCL_OK;
+		}
 		else if (strcmp(argv[1], "port-dmux") == 0) {
 			dmux_ = (PortClassifier *)TclObject::lookup(argv[2]);
 			if (dmux_ == 0) {
@@ -99,16 +91,23 @@ ZRP::command(int argc, const char*const* argv) {
 void
 ZrpHelloTimer::handle(Event*) {
 	agent->sendHello();
-	double interval = MinHelloInterval +
-			((MaxHelloInterval - MinHelloInterval) * Random::uniform());
+	//	double interval = MinHelloInterval +
+	//			((MaxHelloInterval - MinHelloInterval) * Random::uniform());
+	double interval = 2;
 	assert(interval >= 0);
 	Scheduler::instance().schedule(this, &intr, interval);
+}
+
+void
+ZrpNeighborTimer::handle(Event*) {
+	agent->nb_purge();
+	Scheduler::instance().schedule(this, &intr, HELLO_INTERVAL);
 }
 
 /*
  * Constructor for ZRP class
  */
-ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),htimer(this) {					// Need to assign a number from packet.h
+ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),htimer(this),ntimer(this) {					// Need to assign a number from packet.h
 	//	bind_bool("accessible_var_", &accessible_var_);
 	index = id;
 	seqno = 2;										// From AODV need rationale
@@ -153,7 +152,7 @@ void ZRP::recvZRP(Packet *p) {
 		break;
 
 	case ZRPTYPE_HELLO:			//Check if we need Hello packets for NDM
-//		recvHello(p);
+		recvHello(p);
 		break;
 
 	default:
@@ -191,6 +190,7 @@ void ZRP::recvQuery(Packet *p)
 	struct hdr_zrp_query *rq = HDR_ZRP_QUERY(p);
 	zrp_rt_entry *rt;
 
+	printf("Received query from %d", rq->query_src_addr);
 	// Drop, if i am source.
 	if(rq->query_src_addr = index) {
 #ifdef DEBUG
@@ -267,7 +267,7 @@ ZRP::sendQuery(nsaddr_t dst) {
 	ih->dport() = RT_PORT;
 
 	rqh->query_src_addr = index;
-	rqh->query_type = ZRPTYPE_RREQ;
+	rqh->query_type = ZRPTYPE_QUERY;
 	rqh->hop_count = 1;
 	rqh->current_hop_ptr = 1;
 
@@ -287,8 +287,9 @@ ZRP::sendHello() {
 
 	rh->query_type = ZRPTYPE_HELLO;
 	rh->hop_count = 1;
-	rh->query_dst[0] = index;
+//	rh->query_dst[0] = index;
 	rh->query_id = seqno;
+	rh->query_src_addr = index;
 
 	// ch->uid() = 0;
 	ch->ptype() = PT_ZRP;
@@ -305,4 +306,111 @@ ZRP::sendHello() {
 	ih->ttl_ = 1;
 
 	Scheduler::instance().schedule(target_, p, 0.0);
+}
+
+void
+ZRP::recvHello(Packet *p) {
+	struct hdr_zrp_query *qh = HDR_ZRP_QUERY(p);
+
+	printf("Received hello %d \n", index);
+
+	ZRP_Neighbor *nb;
+
+
+	 nb = nb_lookup(qh->query_src_addr);
+	 if(nb == 0) {
+	   nb_insert(qh->query_src_addr);
+	 }
+	 else {
+	   nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
+	 }
+
+
+	Packet::free(p);
+}
+
+void
+ZRP::nb_dump() {
+	ZRP_Neighbor *nb = nbhead.lh_first;
+	printf("Nb cache entries of %d -- ", index);
+	for(; nb; nb = nb->nb_link.le_next) {
+		printf(" %d ", nb->nb_addr);
+	}
+	printf(" complete dumping \n");
+}
+
+void
+ZRP::nb_insert(nsaddr_t id) {
+	ZRP_Neighbor *nb = new ZRP_Neighbor(id);
+
+	nb_dump();
+	assert(nb);
+	nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
+	LIST_INSERT_HEAD(&nbhead, nb, nb_link);
+	seqno += 2;            	 // set of neighbors changed -- TODO
+	assert ((seqno%2) == 0);
+
+	nb_dump();
+	printf("Neighbor Found at time %.17f by %d : %d \n", CURRENT_TIME,index, id);
+	// Neighbor Found
+
+}
+
+
+ZRP_Neighbor*
+ZRP::nb_lookup(nsaddr_t id) {
+	ZRP_Neighbor *nb = nbhead.lh_first;
+
+	for(; nb; nb = nb->nb_link.le_next) {
+		if(nb->nb_addr == id) break;
+	}
+	return nb;
+}
+
+
+/*
+ * Called when we receive *explicit* notification that a Neighbor
+ * is no longer reachable.
+ */
+void
+ZRP::nb_delete(nsaddr_t id) {
+	ZRP_Neighbor *nb = nbhead.lh_first;
+
+	// log_link_del(id);
+	seqno += 2;     // Set of neighbors changed TODO
+	assert ((seqno%2) == 0);
+
+	for(; nb; nb = nb->nb_link.le_next) {
+		if(nb->nb_addr == id) {
+			LIST_REMOVE(nb,nb_link);
+			printf("Neighbor Lost at %.17f from %d : %d \n", CURRENT_TIME, index, nb->nb_addr);
+			delete nb;
+			break;
+		}
+	}
+
+	// Neighbor Lost
+
+	// handle_link_failure(id);	TODO
+
+}
+
+
+/*
+ * Purges all timed-out Neighbor Entries - runs every
+ * HELLO_INTERVAL * 1.5 seconds.
+ */
+void
+ZRP::nb_purge() {
+	ZRP_Neighbor *nb = nbhead.lh_first;
+	ZRP_Neighbor *nbn;
+	double now = CURRENT_TIME;
+
+	for(; nb; nb = nbn) {
+		nbn = nb->nb_link.le_next;
+		if(nb->nb_expire <= now) {
+			nb_delete(nb->nb_addr);
+		}
+	}
+
 }

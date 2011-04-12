@@ -12,6 +12,23 @@
 #define CURRENT_TIME		Scheduler::instance().clock()
 #define INFINITY2			0xff
 
+/*
+   ZRP Neighbor Table Entry
+*/
+class ZRP_Neighbor {
+        friend class ZRP;
+        friend class zrp_rt_entry;
+ public:
+        ZRP_Neighbor(nsaddr_t a) { nb_addr = a; }
+
+ protected:
+        LIST_ENTRY(ZRP_Neighbor) nb_link;
+        nsaddr_t        nb_addr;
+        double          nb_expire;      // ALLOWED_HELLO_LOSS * HELLO_INTERVAL
+};
+
+LIST_HEAD(zrp_ntable, ZRP_Neighbor);
+
 //		Routing Table Entry
 
 class zrp_rt_entry {
