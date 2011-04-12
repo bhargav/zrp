@@ -4,7 +4,7 @@
 #include <cmu-trace.h>
 #include <packet.h>
 #include <zrp/zrp_rtable.h>
-#include <zrp/zrp_rqueue.h>
+#include <queue/priqueue.h>
 #include <classifier/classifier-port.h>
 
 class ZRP;						// Forward Declaration
@@ -64,8 +64,9 @@ protected:
 
 	// Packet Reception Routines
 	void 	recvZRP(Packet *p);
-	void 	recvReply(Packet *p);
-	void	recvRequest(Packet *p);
+	void 	recvLinkState(Packet *p);
+	void 	recvHello(Packet *p);
+	void	recvQuery(Packet *p);
 	void 	recvExtension(Packet *p);
 
 	// Routing Table
@@ -81,6 +82,7 @@ protected:
 	 */
 	Trace *logtarget;
 
+	PriQueue *ifqueue;
 	/* for passing packets up to agents */
 	PortClassifier *dmux_;
 };

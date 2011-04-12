@@ -13,7 +13,7 @@
 int hdr_zrp::offset_;
 static class ZRPHeaderClass : public PacketHeaderClass {
 public:
-	ZRPHeaderClass() : PacketHeaderClass("PacketHeader/ZRP",sizeof(hdr_zrp_inter)) {
+	ZRPHeaderClass() : PacketHeaderClass("PacketHeader/ZRP",sizeof(hdr_all_zrp)) {
 		bind_offset(&hdr_zrp::offset_);
 	}
 } class_rtProtoZRP_hdr;
@@ -75,13 +75,13 @@ ZRP::command(int argc, const char*const* argv) {
 		//	      if (stat != TCL_OK) return stat;
 		//	      return Agent::command(argc, argv);
 		//	    }
-//		else if(strcmp(argv[1], "if-queue") == 0) {
-			//	    ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
+				else if(strcmp(argv[1], "if-queue") == 0) {
+			    ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
 
-			//	      if(ifqueue == 0)
-			//		return TCL_ERROR;
-//			return TCL_OK;
-//		}
+			      if(ifqueue == 0)
+				return TCL_ERROR;
+					return TCL_OK;
+				}
 		else if (strcmp(argv[1], "port-dmux") == 0) {
 			dmux_ = (PortClassifier *)TclObject::lookup(argv[2]);
 			if (dmux_ == 0) {
@@ -144,21 +144,17 @@ void ZRP::recvZRP(Packet *p) {
 	 */
 	switch(ah->ah_type) {
 
-	case ZRPTYPE_RREQ:
-		recvRequest(p);
+	case ZRPTYPE_QUERY:
+		recvQuery(p);
 		break;
 
-	case ZRPTYPE_RREP:
-		recvReply(p);
+	case ZRPTYPE_LINKSTATE:
+		recvLinkState(p);
 		break;
 
-	case ZRPTYPE_REXT:
-		recvExtension(p);
+	case ZRPTYPE_HELLO:			//Check if we need Hello packets for NDM
+//		recvHello(p);
 		break;
-
-		//		case ZRPTYPE_HELLO:			//Check if we need Hello packets for NDM
-		//		recvHello(p);
-		//		break;
 
 	default:
 		fprintf(stderr, "Invalid ZRP type (%x)\n", ah->ah_type);
@@ -166,10 +162,10 @@ void ZRP::recvZRP(Packet *p) {
 	}
 }
 
-void ZRP::recvReply(Packet *p) {
+void ZRP::recvLinkState(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
-	struct hdr_zrp_inter *interh = HDR_ZRP_INTER(p);
+	struct hdr_zrp_query *interh = HDR_ZRP_QUERY(p);
 
 	zrp_rt_entry *rt;
 
@@ -189,14 +185,14 @@ void ZRP::recvExtension(Packet *p) {
 #endif
 }
 
-void ZRP::recvRequest(Packet *p)
+void ZRP::recvQuery(Packet *p)
 {
 	struct hdr_ip *ih =  HDR_IP(p);
-	struct hdr_zrp_inter *rq = HDR_ZRP_INTER(p);
+	struct hdr_zrp_query *rq = HDR_ZRP_QUERY(p);
 	zrp_rt_entry *rt;
 
 	// Drop, if i am source.
-	if(rq->lk_src_addr = index) {
+	if(rq->query_src_addr = index) {
 #ifdef DEBUG
 		fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
 #endif // DEBUG
@@ -244,7 +240,8 @@ ZRP::sendQuery(nsaddr_t dst) {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
-	struct hdr_zrp_inter *rqh = HDR_ZRP_INTER(p);
+	struct hdr_zrp_query *rqh = HDR_ZRP_QUERY(p);
+
 	zrp_rt_entry *rt = rtable.rt_lookup(dst);
 
 	// No RTF_UP
@@ -258,7 +255,7 @@ ZRP::sendQuery(nsaddr_t dst) {
 	// No checking for request count
 
 	ch->ptype() = PT_ZRP;
-	ch->size() = IP_HDR_LEN + sizeof(struct hdr_zrp_inter);
+	ch->size() = IP_HDR_LEN + rqh->size();
 	ch->iface() = -2;
 	ch->error() = 0;
 	ch->addr_type() = NS_AF_NONE;
@@ -269,10 +266,10 @@ ZRP::sendQuery(nsaddr_t dst) {
 	ih->saddr() = RT_PORT;
 	ih->dport() = RT_PORT;
 
-	rqh->lk_src_addr = index;
-	rqh->inter_type = ZRPTYPE_RREQ;
-	rqh->h_count = 1;
-	rqh->curr_hop_ptr = 1;
+	rqh->query_src_addr = index;
+	rqh->query_type = ZRPTYPE_RREQ;
+	rqh->hop_count = 1;
+	rqh->current_hop_ptr = 1;
 
 	Scheduler::instance().schedule(target_, p, 0.);
 }
@@ -282,20 +279,20 @@ ZRP::sendHello() {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
-	struct hdr_zrp_inter *rh = HDR_ZRP_INTER(p);
+	struct hdr_zrp_query *rh = HDR_ZRP_QUERY(p);
 
 #ifdef DEBUG
 	fprintf(stderr, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 
-	rh->inter_type = ZRPTYPE_HELLO;
-	rh->h_count = 1;
-	rh->query_dst = index;
-	rh->q_id = seqno;
+	rh->query_type = ZRPTYPE_HELLO;
+	rh->hop_count = 1;
+	rh->query_dst[0] = index;
+	rh->query_id = seqno;
 
 	// ch->uid() = 0;
 	ch->ptype() = PT_ZRP;
-	ch->size() = IP_HDR_LEN + sizeof(hdr_zrp_inter);
+	ch->size() = IP_HDR_LEN + rh->size();
 	ch->iface() = -2;
 	ch->error() = 0;
 	ch->addr_type() = NS_AF_NONE;
