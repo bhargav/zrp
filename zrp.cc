@@ -265,7 +265,7 @@ ZRP::sendQuery(nsaddr_t dst) {
 
 	ih->saddr() = index;
 	ih->daddr() = IP_BROADCAST;
-	ih->saddr() = RT_PORT;
+	ih->sport() = RT_PORT;
 	ih->dport() = RT_PORT;
 
 	rqh->query_src_addr = index;
@@ -298,7 +298,7 @@ ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_i
 	ih->saddr() = index;
 	ih->ttl_ = 1;
 	ih->daddr() = IP_BROADCAST;
-	ih->saddr() = RT_PORT;
+	ih->sport() = RT_PORT;
 	ih->dport() = RT_PORT;
 
 	lsh->link_src = link_src;
@@ -317,6 +317,89 @@ ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_i
 		lsh->link_dst_subnet = subnet_mask;
 
 	zrph->ah_type = ZRPTYPE_LINKSTATE;
+
+	Scheduler::instance().schedule(target_, p, 0.);
+
+}
+
+void
+ZRP::sendQueryExtension(nsaddr_t dst) {
+	Packet *p = Packet::alloc();
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp_query *rqh = HDR_ZRP_QUERY(p);
+
+	zrp_rt_entry *rt = rtable.rt_lookup(dst);
+
+	// No RTF_UP
+	// No rt_req_timeout
+
+#ifdef DEBUG
+	fprintf(stderr, "(%2d) - %2d sending Query Extension , dst: %d\n",
+			++route_request, index, rt->rt_dst);
+#endif // DEBUG
+
+	// No checking for request count
+
+	ch->ptype() = PT_ZRP;
+	ch->size() = IP_HDR_LEN + rqh->size();
+	ch->iface() = -2;
+	ch->error() = 0;
+	ch->addr_type() = NS_AF_NONE;
+	ch->prev_hop_ = index;
+
+	ih->saddr() = index;
+	ih->daddr() = rt->routes.lh_first->node;
+	ih->sport() = RT_PORT;
+	ih->dport() = RT_PORT;
+
+	rqh->query_src_addr = index;
+	rqh->query_type = ZRPTYPE_QUERYEXTENSION;
+	rqh->hop_count = 0;
+	rqh->current_hop_ptr = 1;
+	// Route ??
+	Scheduler::instance().schedule(target_, p, 0.);
+}
+
+void
+AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
+		u_int32_t rpseq, u_int32_t lifetime, double timestamp)
+{
+	Packet *p = Packet::alloc();
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp_query *rp = HDR_ZRP_QUERY(p);
+	zrp_rt_entry *rt = rtable.rt_lookup(ipdst);
+
+#ifdef DEBUG
+	fprintf(stderr, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
+#endif // DEBUG
+	assert(rt);
+
+	rp->rp_type = ZRPTYPE_REPLY;
+	//rp->rp_flags = 0x00;
+	rp->rp_hop_count = hop_count;
+	rp->rp_dst = rpdst;
+	rp->rp_dst_seqno = rpseq;
+	rp->rp_src = index;
+	//rp->rp_lifetime = lifetime;
+	//rp->rp_timestamp = timestamp;
+
+	// ch->uid() = 0;
+	ch->ptype() = PT_ZRP;
+	ch->size() = IP_HDR_LEN + rp->size();
+	ch->iface() = -2;
+	ch->error() = 0;
+	ch->addr_type() = NS_AF_INET;
+	ch->next_hop_ = rt->rt_nexthop;
+	ch->prev_hop_ = index;
+	ch->direction() = hdr_cmn::DOWN;
+
+	ih->saddr() = index;
+	ih->daddr() = ipdst;
+	ih->sport() = RT_PORT;
+	ih->dport() = RT_PORT;
+	//ih->ttl_ = NETWORK_DIAMETER;
 
 	Scheduler::instance().schedule(target_, p, 0.);
 
