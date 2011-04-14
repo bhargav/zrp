@@ -111,7 +111,7 @@ ZrpNeighborTimer::handle(Event*) {
 /*
  * Constructor for ZRP class
  */
-ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones() {					// Need to assign a number from packet.h
+ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones(),tempqc() {					// Need to assign a number from packet.h
 	//	bind("zone_radius", (int64_t *) &zone_radius);
 	index = id;
 	seqno = 2;										// From AODV need rationale
@@ -193,14 +193,54 @@ void ZRP::recvQuery(Packet *p)
 	zrp_rt_entry *rt;
 
 	printf("Received query from %d", rq->query_src_addr);
+
 	// Drop, if i am source.
 	if(rq->query_src_addr = index) {
-#ifdef DEBUG
-		fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
-#endif // DEBUG
 		Packet::free(p);
 		return;
 	}
+
+	// ih->ttl_ --; Done in recv();
+	rq->hop_count++;
+
+	// Extract route from packet and record to previous hops
+	int count;
+
+	zrp_nodelist prev_hops;
+	for (int i = 0; i <= rq->num_nodes - 1; i++) {	// current_hop_ptr
+		prev_hops.nl_insertNode(rq->route[i]);
+	}
+
+	query_cache_entry *qce = tempqc.qc_insert(rq->query_src_addr);
+	if (qce == 0) {
+
+		qce->query_id = rq->query_id;
+		qce->hop_count = rq->hop_count;
+	}
+
+	if (rtable.rt_lookup(rq->query_src_addr) == 0) {
+		rt = rtable.rt_add(rq->query_src_addr);
+		rt->zrp_intrazone = FALSE;
+
+		zrp_nodelist_entry *nle = prev_hops.head();
+		for (count = 0; nle; nle = nle->nl_link.le_next, count++) {
+			qce->prev_hop[count] = nle->node;
+		}
+		for (int j = count - 1; j > 0; j ++) {
+			rt->routes.nl_insertNode(qce->prev_hop[count]);
+		}
+	}
+	// Extraction and updating routing table complete
+
+	if (rtable.rt_isIntra(rq->query_dst)) {
+		// destination is within this node's routing zone
+		// send query extension TODO
+	}
+	else {
+		// destination is outside this node's routing zone
+		// Send packet to BRP
+	}
+
 }
 
 void
@@ -270,8 +310,8 @@ ZRP::sendQuery(nsaddr_t dst) {
 
 	rqh->query_src_addr = index;
 	rqh->query_type = ZRPTYPE_QUERY;
-	rqh->hop_count = 1;
-	rqh->current_hop_ptr = 1;
+	rqh->hop_count = 0;
+	rqh->current_hop_ptr = 0;
 
 	Scheduler::instance().schedule(target_, p, 0.);
 }
@@ -425,7 +465,7 @@ ZRP::nb_delete(nsaddr_t id) {
 	ZRP_Neighbor *nb = nbhead.lh_first;
 
 	// log_link_del(id);
-	seqno += 2;     // Set of neighbors changed TODO
+	seqno += 2;     // Set of neighbors changed
 	assert ((seqno%2) == 0);
 
 	for(; nb; nb = nb->nb_link.le_next) {
@@ -440,7 +480,7 @@ ZRP::nb_delete(nsaddr_t id) {
 	//	nb_dump();
 	// Neighbor Lost
 
-	// handle_link_failure(id);	TODO
+	// handle_link_failure(id);
 
 }
 

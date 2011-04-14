@@ -9,6 +9,7 @@
 
 #include <zrp/zrp_aux.h>
 #include <zrp/zrp_iarpdst.h>
+#include <zrp/zrp_ierpdst.h>
 
 #define CURRENT_TIME		Scheduler::instance().clock()
 #define INFINITY2			0xff
@@ -45,8 +46,8 @@ private:
 
 	nsaddr_t zrp_dst;
 	nsaddr_t zrp_subnet;
-	zrp_node_list routes;
-	zrp_metric_list route_metrics;
+	zrp_nodelist routes;
+//	zrp_metric_list route_metrics;
 	bool zrp_intrazone;
 
 };

@@ -116,6 +116,8 @@ protected:
 	void 				neighborFound(nsaddr_t);
 	void 				neighborLost(nsaddr_t);
 
+	// IERP
+	query_cache 		tempqc;
 	// Bordercast Tree Table
 
 

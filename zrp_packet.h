@@ -54,7 +54,7 @@ struct hdr_zrp_query {
 	u_int16_t		query_id;
 	u_int8_t		reserved[2];
 	nsaddr_t		query_src_addr;
-	nsaddr_t		query_dst[ZRP_MAX_DESTINATIONS];
+	nsaddr_t		query_dst;//[ZRP_MAX_DESTINATIONS];
 	nsaddr_t		route[ZRP_MAX_ERRORS];
 	// metric
 

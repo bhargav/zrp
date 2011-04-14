@@ -23,7 +23,7 @@ protected:
 
 	nsaddr_t qc_src;			// Query Source
 	u_int16_t query_id;			// Query ID
-	zrp_node_list prev_hop;			// Previous Hop
+	nsaddr_t prev_hop[100];			// Previous Hop
 	u_int8_t hop_count;			// Hop count
 	u_int injection_counter;		// Injection counter - don't know use yet
 };
@@ -33,7 +33,11 @@ protected:
 class query_cache {
 public:
 	query_cache() { LIST_INIT(&qc_head); }
-	query_cache_entry* head() { return qc_head.lh_first; }
+	query_cache_entry* 	head() { return qc_head.lh_first; }
+	query_cache_entry* 	qc_insert(nsaddr_t);
+	query_cache_entry* 	qc_lookup(nsaddr_t);
+	void				qc_delete(nsaddr_t);
+	void				qc_dump();
 
 private:
 	LIST_HEAD(zrp_query_cache_head, query_cache_entry) qc_head;

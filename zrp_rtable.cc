@@ -2,31 +2,25 @@
 
 // Routing Table entry
 
-zrp_rt_entry::zrp_rt_entry()
+zrp_rt_entry::zrp_rt_entry() : routes()
 {
-//	zrp_dst = 0;
-//	zrp_subnet = 0;
+	zrp_dst = 0;
+	zrp_subnet = 0;
 
-	LIST_INIT(&routes);
-	LIST_INIT(&route_metrics);
+//	LIST_INIT(&routes);
+//	LIST_INIT(&route_metrics);
 	zrp_intrazone = FALSE;
 }
 
 zrp_rt_entry::~zrp_rt_entry()
 {
-	zrp_nodelist_entry *nlen;
-
-	while((nlen = routes.lh_first)) {
-		LIST_REMOVE(nlen, nl_link);
-		delete nlen;
-	}
-
-	metric_entry *men;
-
-	while((men = route_metrics.lh_first)) {
-		LIST_REMOVE(men, metric_link);
-		delete men;
-	}
+	routes.nl_purge();
+//	metric_entry *men;
+//
+//	while((men = route_metrics.lh_first)) {
+//		LIST_REMOVE(men, metric_link);
+//		delete men;
+//	}
 }
 
 // Routing Table
