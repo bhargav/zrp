@@ -76,5 +76,3 @@ bool zrp_rtable::rt_isIntra(nsaddr_t id)
 	}
 	return FALSE;
 }
-
-

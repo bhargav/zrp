@@ -1,7 +1,12 @@
 /* zrp_aux.h */
 #ifndef __zrp_aux_h__
 #define __zrp_aux_h__
+
+#include <assert.h>
+#include <sys/types.h>
+#include <config.h>
 #include <lib/bsd-list.h>
+#include <scheduler.h>
 
 class zrp_nodelist_entry {
 	friend class ZRP;
@@ -20,6 +25,8 @@ public:
 	zrp_nodelist_entry* head() { return nl_head.lh_first; }
 	zrp_nodelist_entry* nl_insertNode (nsaddr_t);
 	zrp_nodelist_entry* nl_lookup(nsaddr_t);
+	bool nl_isempty();
+	void nl_purge();
 	void nl_delete(nsaddr_t);
 
 
@@ -39,53 +46,5 @@ protected:
 };
 
 LIST_HEAD(zrp_metric_list, metric_entry);
-
-class ls_info_entry
-{
-	friend class ZRP;
-	friend class zrp_lst_entry;
-protected:
-	nsaddr_t link_dst;
-	nsaddr_t link_subnet;
-	zrp_metric_list link_metrics;
-	bool forwarded;
-	LIST_ENTRY(ls_info_entry) ls_info_link;
-};
-
-LIST_HEAD(zrp_ls_info, ls_info_entry);
-
-inline zrp_nodelist_entry *zrp_nodelist::nl_insertNode(nsaddr_t id)
-{
-	zrp_nodelist_entry *nle = new zrp_nodelist_entry;
-	assert(nle);
-	nle->node = id;
-	LIST_INSERT_AFTER(nl_head.lh_first , nle, nl_link);
-	return nle;
-}
-
-
-
-inline zrp_nodelist_entry *zrp_nodelist::nl_lookup(nsaddr_t id)
-{
-	zrp_nodelist_entry *nle = nl_head.lh_first;
-	for (; nle ; nle = nle->nl_link.le_next) {
-		if (nle->node = id)
-			break;
-	}
-	return nle;
-}
-
-inline void zrp_nodelist::nl_delete(nsaddr_t id)
-{
-	zrp_nodelist_entry *nle = nl_lookup(id);
-	if (nle) {
-		LIST_REMOVE(nle, nl_link);
-		delete nle;
-	}
-}
-
-
-
-
 
 #endif

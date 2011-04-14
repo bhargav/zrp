@@ -17,7 +17,15 @@ class ZRP;						// Forward Declaration
 #define BAD_LINK_LIFETIME       3               // 3000 ms
 #define MaxHelloInterval        (1.25 * HELLO_INTERVAL)
 #define MinHelloInterval        (0.75 * HELLO_INTERVAL)
-#define ALLOWED_NEIGHBOR_LOSS	 (3 * MaxHelloInterval)	// Rationale .. if we do not get 3 hello's assume lost
+#define ALLOWED_NEIGHBOR_LOSS	(3 * MaxHelloInterval)	// Rationale .. if we do not get 3 hello's assume lost
+
+// Macros for my use
+#define ZRP_COMPLETE			1
+#define ZRP_INCOMPLETE			0
+#define ZRP_UP					1
+#define ZRP_DOWN				0
+#define ZRP_UPDATE_IN_PROGRESS  1
+#define ZRP_UPDATE_COMPLETE		0
 
 class ZrpHelloTimer : public Handler {
 public:
@@ -42,8 +50,8 @@ public:
 	ZoneManagementTimer(ZRP* a) : agent(a) {}
 	void handle(Event*);
 private:
-	ZRP *agent;
-	Event intr;
+	ZRP 	*agent;
+	Event 	intr;
 };
 
 /*
@@ -52,6 +60,7 @@ private:
 
 class ZRP: public Agent {
 	friend class zrp_rt_entry;
+	friend class zrp_lstable;
 	friend class ZoneManagementTimer;
 	friend class ZrpHelloTimer;
 	friend class ZrpNeighborTimer;
@@ -67,11 +76,12 @@ protected:
 	nsaddr_t 			index;					// IP Address of this node
 	u_int32_t 			seqno;					// Sequence Number
 	u_int8_t			zone_radius;			// Zone Radius
+	u_int16_t			my_state_id;
 
-
-	zrp_ntable         	nbhead;                 // Neighbor Cache
+	bool 				cum_status;				// Updating Routing Table
 
 	// Neighbor Table Management
+	zrp_ntable         	nbhead;                 // Neighbor Cache
 	void            	nb_insert(nsaddr_t id);
 	ZRP_Neighbor*   	nb_lookup(nsaddr_t id);
 	void            	nb_delete(nsaddr_t id);
@@ -81,6 +91,7 @@ protected:
 	// Packet Transmission Routines
 	void 				forward(zrp_rt_entry*, Packet*, double);
 	void				sendQuery(nsaddr_t);
+	void				sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status);
 	void				sendHello();
 
 	// Packet Reception Routines
@@ -90,20 +101,32 @@ protected:
 	void				recvQuery(Packet *p);
 	void 				recvExtension(Packet *p);
 
-;	// Routing Table
+	// Routing Table
 	zrp_rtable			rtable;				// Routing Table
+	void				updateIntraRoutingTable(Packet*, nsaddr_t, bool, bool);
+
+
+	void 				rt_dump();			// Print the routing table for the present node
+
+	// Link State IARP
+	zrp_nodelist 		pending_lst_list;
+	zrp_nodelist 		new_neighbour_list;
+	zrp_nodelist 		former_routing_zones;
+	zrp_lstable			lktable;
+	void 				neighborFound(nsaddr_t);
+	void 				neighborLost(nsaddr_t);
 
 	// Bordercast Tree Table
+
 
 	// Timer Management
 	ZrpHelloTimer      	htimer;				// Hello Timer
 	ZrpNeighborTimer   	ntimer;				// Neighbor Table Management Timer
 
-	/*
-	 * logging the contents of the routing databases
-	 */
+	// logging the contents of the routing databases
 	Trace 				*logtarget;
 	PriQueue 			*ifqueue;
+
 	/* for passing packets up to agents */
 	PortClassifier *dmux_;
 };

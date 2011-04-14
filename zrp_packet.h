@@ -69,6 +69,7 @@ struct hdr_zrp_query {
 };
 
 struct hdr_zrp_linkstate {
+	nsaddr_t		dummy_reserved;
 	nsaddr_t		link_src;
 	nsaddr_t		link_dst;
 	nsaddr_t		pkt_src;
@@ -76,13 +77,14 @@ struct hdr_zrp_linkstate {
 	u_int8_t 		zone_radius;		//Zone Radius
 	bool 			flags[8];			//Full Link information
 	nsaddr_t		link_dst_subnet;
+	bool 			link_status;
 	// metric
 
 	double			lst_timestamp;
 
 	inline int size() {
 			int sz = 0;
-			sz = (6)*sizeof(u_int32_t);
+			sz = (7)*sizeof(u_int32_t) + sizeof(bool);
 			assert(sz);
 			return sz;
 		}

@@ -19,13 +19,14 @@ public:
 } class_rtProtoZRP_hdr;
 
 static class ZRPclass : public TclClass {
-public:
-	ZRPclass() : TclClass("Agent/ZRP") {}
+public:	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 
-	TclObject* create(int argc, const char*const* argv) {
-		assert(argc == 5);
-		return (new ZRP((nsaddr_t) Address::instance().str2addr(argv[4])));
-	}
+ZRPclass() : TclClass("Agent/ZRP") {}
+
+TclObject* create(int argc, const char*const* argv) {
+	assert(argc == 5);
+	return (new ZRP((nsaddr_t) Address::instance().str2addr(argv[4])));
+}
 } class_rtProtoZRP;
 
 int
@@ -43,11 +44,14 @@ ZRP::command(int argc, const char*const* argv) {
 
 			//	#ifndef AODV_LINK_LAYER_DETECTION
 			htimer.handle((Event*) 0);
-			//	      ntimer.handle((Event*) 0);
+			ntimer.handle((Event*) 0);
 			//	#endif // LINK LAYER DETECTION
 
 			//	      rtimer.handle((Event*) 0);
 			return TCL_OK;
+		}
+		if(strcasecmp(argv[1], "print_rtable") == 0) {
+			rt_dump();
 		}
 	}
 	else if(argc == 3) {
@@ -91,9 +95,9 @@ ZRP::command(int argc, const char*const* argv) {
 void
 ZrpHelloTimer::handle(Event*) {
 	agent->sendHello();
-	//	double interval = MinHelloInterval +
-	//			((MaxHelloInterval - MinHelloInterval) * Random::uniform());
-	double interval = 2;
+	double interval = MinHelloInterval +
+			((MaxHelloInterval - MinHelloInterval) * Random::uniform());
+	//	double interval = 2;
 	assert(interval >= 0);
 	Scheduler::instance().schedule(this, &intr, interval);
 }
@@ -101,16 +105,19 @@ ZrpHelloTimer::handle(Event*) {
 void
 ZrpNeighborTimer::handle(Event*) {
 	agent->nb_purge();
-	Scheduler::instance().schedule(this, &intr, HELLO_INTERVAL);
+	Scheduler::instance().schedule(this, &intr, 5 * HELLO_INTERVAL * Random::uniform());
 }
 
 /*
  * Constructor for ZRP class
  */
-ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),htimer(this),ntimer(this) {					// Need to assign a number from packet.h
-	//	bind_bool("accessible_var_", &accessible_var_);
+ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones() {					// Need to assign a number from packet.h
+	//	bind("zone_radius", (int64_t *) &zone_radius);
 	index = id;
 	seqno = 2;										// From AODV need rationale
+	zone_radius = 2;
+	my_state_id = 1;
+	cum_status = ZRP_UPDATE_COMPLETE;
 }
 
 /*
@@ -164,15 +171,10 @@ void ZRP::recvZRP(Packet *p) {
 void ZRP::recvLinkState(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
-	struct hdr_zrp_query *interh = HDR_ZRP_QUERY(p);
+	struct hdr_zrp *zh = HDR_ZRP(p);
+	struct hdr_zrp_linkstate *lh = HDR_ZRP_LINKSTATE(p);
 
-	zrp_rt_entry *rt;
-
-#ifdef DEBUG
-	fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
-#endif
-
-
+	updateIntraRoutingTable(p, lh->link_dst, TRUE, lh->link_state_id);
 }
 
 void ZRP::recvExtension(Packet *p) {
@@ -275,19 +277,68 @@ ZRP::sendQuery(nsaddr_t dst) {
 }
 
 void
+ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status) {
+	Packet *p = Packet::alloc();
+	struct hdr_cmn *ch = HDR_CMN(p);
+	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp *zrph = HDR_ZRP(p);
+	struct hdr_zrp_linkstate *lsh = HDR_ZRP_LINKSTATE(p);
+
+	// No RTF_UP
+	// No rt_req_timeout
+	// No checking for request count
+
+	ch->ptype() = PT_ZRP;
+	ch->size() = IP_HDR_LEN + lsh->size();
+	ch->iface() = -2;
+	ch->error() = 0;
+	ch->addr_type() = NS_AF_NONE;
+	ch->prev_hop_ = index;
+
+	ih->saddr() = index;
+	ih->ttl_ = 1;
+	ih->daddr() = IP_BROADCAST;
+	ih->saddr() = RT_PORT;
+	ih->dport() = RT_PORT;
+
+	lsh->link_src = link_src;
+	lsh->link_dst = link_dst;
+	lsh->pkt_src = index;
+	lsh->flags[0] = *(flags++);
+	lsh->flags[1] = *(flags++);
+	lsh->flags[2] = *(flags++);
+	lsh->flags[3] = *(flags++);
+	lsh->flags[4] = *(flags++);
+	lsh->link_state_id = state_id;
+	lsh->zone_radius = radius;
+	lsh->link_status = link_status;
+
+	if (lsh->flags[3] == 0)
+		lsh->link_dst_subnet = subnet_mask;
+
+	zrph->ah_type = ZRPTYPE_LINKSTATE;
+
+	Scheduler::instance().schedule(target_, p, 0.);
+
+}
+
+void
 ZRP::sendHello() {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp *zrph = HDR_ZRP(p);
 	struct hdr_zrp_query *rh = HDR_ZRP_QUERY(p);
 
 #ifdef DEBUG
 	fprintf(stderr, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 
+	zrph->ah_type = ZRPTYPE_HELLO;
+
 	rh->query_type = ZRPTYPE_HELLO;
 	rh->hop_count = 1;
-//	rh->query_dst[0] = index;
+	//	rh->query_dst[0] = index;
 	rh->query_id = seqno;
 	rh->query_src_addr = index;
 
@@ -312,19 +363,17 @@ void
 ZRP::recvHello(Packet *p) {
 	struct hdr_zrp_query *qh = HDR_ZRP_QUERY(p);
 
-	printf("Received hello %d \n", index);
+	printf("Received hello %d with %d radius \n", index, zone_radius);
 
 	ZRP_Neighbor *nb;
-
-
-	 nb = nb_lookup(qh->query_src_addr);
-	 if(nb == 0) {
-	   nb_insert(qh->query_src_addr);
-	 }
-	 else {
-	   nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
-	 }
-
+	nb = nb_lookup(qh->query_src_addr);
+	if(nb == 0) {
+		nb_insert(qh->query_src_addr);
+		neighborFound(qh->query_src_addr);
+	}
+	else {
+		nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
+	}
 
 	Packet::free(p);
 }
@@ -343,15 +392,14 @@ void
 ZRP::nb_insert(nsaddr_t id) {
 	ZRP_Neighbor *nb = new ZRP_Neighbor(id);
 
-	nb_dump();
+	//	nb_dump();
 	assert(nb);
 	nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
 	LIST_INSERT_HEAD(&nbhead, nb, nb_link);
 	seqno += 2;            	 // set of neighbors changed -- TODO
 	assert ((seqno%2) == 0);
 
-	nb_dump();
-	printf("Neighbor Found at time %.17f by %d : %d \n", CURRENT_TIME,index, id);
+	//	nb_dump();
 	// Neighbor Found
 
 }
@@ -383,12 +431,13 @@ ZRP::nb_delete(nsaddr_t id) {
 	for(; nb; nb = nb->nb_link.le_next) {
 		if(nb->nb_addr == id) {
 			LIST_REMOVE(nb,nb_link);
-			printf("Neighbor Lost at %.17f from %d : %d \n", CURRENT_TIME, index, nb->nb_addr);
 			delete nb;
 			break;
 		}
 	}
 
+	neighborLost(id);
+	//	nb_dump();
 	// Neighbor Lost
 
 	// handle_link_failure(id);	TODO
@@ -412,5 +461,142 @@ ZRP::nb_purge() {
 			nb_delete(nb->nb_addr);
 		}
 	}
+}
 
+
+void ZRP::neighborFound(nsaddr_t id)
+{
+	printf("Neighbor Found at time %.17f by %d : %d \n", CURRENT_TIME,index, id);
+	zrp_nodelist_entry *nh = new_neighbour_list.nl_lookup(id);
+
+	if (nh == 0)
+		new_neighbour_list.nl_insertNode(id);
+
+	bool fl[8] = {0,0,0,0,0,0,0,0};
+	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP);
+	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
+}
+
+void ZRP::neighborLost(nsaddr_t id)
+{
+	printf("Neighbor Lost at %.17f from %d : %d \n", CURRENT_TIME, index, id);
+	zrp_nodelist_entry *nh = new_neighbour_list.nl_lookup(id);
+
+	if (nh != 0)
+		new_neighbour_list.nl_delete(id);
+
+	updateIntraRoutingTable(NULL, id, 0, ZRP_DOWN);
+}
+
+void
+ZRP::rt_dump()
+{
+	printf("Dumping Routing Table for %d at %.17f -- ", index, CURRENT_TIME);
+}
+
+void
+ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool ifneigh_status) {
+	printf("Updating Routing Table Case %d", (pkt == 0));
+	bool my_link_changed;
+	nsaddr_t link_source;
+	nsaddr_t pk_source;
+	u_int16_t state_id;
+	u_int8_t	radius;
+	bool full_link_state,current_update,all_updates,mask_;
+	bool link_status;
+
+	if (pkt) {
+		struct hdr_cmn *ch = HDR_CMN(pkt);
+		struct hdr_ip *ih = HDR_IP(pkt);
+		struct hdr_zrp_linkstate *lsh = HDR_ZRP_LINKSTATE(pkt);
+
+		my_link_changed = FALSE;
+		link_source = lsh->link_src;
+		pk_source = lsh->pkt_src;
+		state_id = lsh->link_state_id;
+		radius = lsh->zone_radius;
+
+		full_link_state = lsh->flags[0];
+		current_update = lsh->flags[1];
+		all_updates = lsh->flags[2];
+		mask_ = lsh->flags[3];
+		link_status = lsh->flags[4];
+	}
+	else {
+		link_source = index;
+		pk_source = index;
+		state_id = my_state_id;
+		radius = zone_radius;
+
+		full_link_state = 0;
+		current_update = ZRP_COMPLETE;
+		all_updates = ZRP_INCOMPLETE;
+		link_status = ifneigh_status;			// If Neighbor Found or Lost
+	}
+
+	if (pending_lst_list.nl_lookup(pk_source) == 0)
+		pending_lst_list.nl_insertNode(pk_source);
+
+	bool lst_status;
+
+	// Add to Link_State_Table Return status
+	if (link_status == ZRP_UP) {
+		bool fl[8] = {full_link_state,current_update,all_updates,mask_,link_status, 0, 0, 0};
+		lst_status = lktable.lst_insert(link_source, link_dest, 0, radius, state_id, fl);
+	}
+	else {
+		// REMOVE Link State Update for lost link
+		// strategy negative update or refine table TODO
+	}
+
+	printf(" For node %d ::", index);
+	lktable.lst_dump();
+
+	if(lst_status == ZRP_NEW_LINK_INFO)	{							// If NEW_LINK_INFO
+		cum_status = ZRP_UPDATE_IN_PROGRESS;
+		if (my_link_changed) {
+			if (ifneigh_status == ZRP_UP) {
+				if(new_neighbour_list.nl_lookup(link_dest))
+					new_neighbour_list.nl_insertNode(link_dest);
+			}
+			else {
+				new_neighbour_list.nl_delete(link_dest);
+			}
+			my_state_id++;
+		}
+	}
+
+	if (all_updates == ZRP_COMPLETE)
+		pending_lst_list.nl_delete(pk_source);
+
+	if (pending_lst_list.nl_isempty() && (cum_status == ZRP_UPDATE_IN_PROGRESS)) {
+
+		// Do Routing Table Mojo TODO
+
+		// Rebuild Routing Table Mojo TODO
+	}
+
+	// Construct Bordercast Tree
+
+	// broadcast_link_state_updates
+
+	zrp_nodelist_entry *nle = new_neighbour_list.head();
+	for (; nle; nle = nle->nl_link.le_next) {
+		// Send Link State Table TODO
+	}
+
+	new_neighbour_list.nl_purge();
+
+	cum_status = ZRP_UPDATE_COMPLETE;
+
+	nle = former_routing_zones.head();
+	for (; nle; nle = nle->nl_link.le_next) {
+
+		if (rtable.rt_lookup(nle->node) == 0) {
+			// Report Lost Nodes to IERP
+		}
+
+	}
+
+	former_routing_zones.nl_purge();
 }

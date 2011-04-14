@@ -8,6 +8,7 @@
 #include <scheduler.h>
 
 #include <zrp/zrp_aux.h>
+#include <zrp/zrp_iarpdst.h>
 
 #define CURRENT_TIME		Scheduler::instance().clock()
 #define INFINITY2			0xff
@@ -65,8 +66,5 @@ private:
 	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 
 };
-
-
-
 
 #endif
