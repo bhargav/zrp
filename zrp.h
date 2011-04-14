@@ -92,6 +92,8 @@ protected:
 	void 				forward(zrp_rt_entry*, Packet*, double);
 	void				sendQuery(nsaddr_t);
 	void				sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status);
+	void				sendQueryExtension(nsaddr_t);
+	void				sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,u_int32_t rpseq, double timestamp);
 	void				sendHello();
 
 	// Packet Reception Routines

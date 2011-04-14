@@ -10,11 +10,13 @@
 /* =====================================================================
    Packet Formats...
    ===================================================================== */
-#define ZRPTYPE_HELLO  	0x01
+#define ZRPTYPE_HELLO  				0x01
 
-#define ZRPTYPE_QUERY 		0x02
-#define ZRPTYPE_LINKSTATE	0x04
-#define ZRPTYPE_BRP			0x08
+#define ZRPTYPE_QUERY 				0x02
+#define ZRPTYPE_LINKSTATE			0x04
+#define ZRPTYPE_BRP					0x08
+#define ZRPTYPE_QUERYEXTENSION 		0x10
+#define ZRPTYPE_REPLY				0x12
 
 /*
  * ZRP Routing Protocol Header Macros

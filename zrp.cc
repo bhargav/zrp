@@ -201,6 +201,7 @@ void ZRP::recvQuery(Packet *p)
 	}
 
 	// ih->ttl_ --; Done in recv();
+	rq->ttl--;
 	rq->hop_count++;
 
 	// Extract route from packet and record to previous hops
@@ -235,6 +236,7 @@ void ZRP::recvQuery(Packet *p)
 	if (rtable.rt_isIntra(rq->query_dst)) {
 		// destination is within this node's routing zone
 		// send query extension TODO
+		sendQueryExtension(rq->query_dst);
 	}
 	else {
 		// destination is outside this node's routing zone
@@ -367,19 +369,22 @@ ZRP::sendQueryExtension(nsaddr_t dst) {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp *zh = HDR_ZRP(p);
 	struct hdr_zrp_query *rqh = HDR_ZRP_QUERY(p);
 
 	zrp_rt_entry *rt = rtable.rt_lookup(dst);
 
 	// No RTF_UP
 	// No rt_req_timeout
+	// No checking for request count
 
 #ifdef DEBUG
 	fprintf(stderr, "(%2d) - %2d sending Query Extension , dst: %d\n",
 			++route_request, index, rt->rt_dst);
 #endif // DEBUG
 
-	// No checking for request count
+
+	zh->ah_type = ZRP_QUERYEXTENSION;
 
 	ch->ptype() = PT_ZRP;
 	ch->size() = IP_HDR_LEN + rqh->size();
@@ -387,27 +392,42 @@ ZRP::sendQueryExtension(nsaddr_t dst) {
 	ch->error() = 0;
 	ch->addr_type() = NS_AF_NONE;
 	ch->prev_hop_ = index;
+	ch->next_hop_ = rt->routes.head()->node;
 
 	ih->saddr() = index;
-	ih->daddr() = rt->routes.lh_first->node;
+	ih->daddr() = rt->routes.head()->node;
 	ih->sport() = RT_PORT;
 	ih->dport() = RT_PORT;
 
 	rqh->query_src_addr = index;
+	rqh->query_dst = dst;
 	rqh->query_type = ZRPTYPE_QUERYEXTENSION;
 	rqh->hop_count = 0;
 	rqh->current_hop_ptr = 1;
-	// Route ??
+
+	rqh->route[0] = index;
+
+	zrp_nodelist_entry *rtentry = rt->routes.head();
+	for (int i= 1; rtentry; rtentry = rtentry->nl_link.le_next ) {
+		rqh->route[i] = rtentry->node;
+		i++;
+	}
+
+	rqh->num_nodes = i;
+	ih->ttl_ = i + 1;
+	rqh->ttl = i + 1;
+	rqh->num_dest = 1;
+
 	Scheduler::instance().schedule(target_, p, 0.);
 }
 
 void
-AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
-		u_int32_t rpseq, u_int32_t lifetime, double timestamp)
+ZRP::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst, u_int32_t rpseq, double timestamp)
 {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp *zh = HDR_ZRP(p);
 	struct hdr_zrp_query *rp = HDR_ZRP_QUERY(p);
 	zrp_rt_entry *rt = rtable.rt_lookup(ipdst);
 
@@ -416,14 +436,13 @@ AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
 #endif // DEBUG
 	assert(rt);
 
-	rp->rp_type = ZRPTYPE_REPLY;
-	//rp->rp_flags = 0x00;
-	rp->rp_hop_count = hop_count;
-	rp->rp_dst = rpdst;
-	rp->rp_dst_seqno = rpseq;
-	rp->rp_src = index;
-	//rp->rp_lifetime = lifetime;
-	//rp->rp_timestamp = timestamp;
+	zh->ah_type = ZRPTYPE_REPLY;
+
+	rp->hop_count = hop_count;
+	rp->query_dst = rpdst;
+	rp->query_id = rpseq;
+	rp->query_src_addr = index;
+	rp->rq_timestamp = timestamp;
 
 	// ch->uid() = 0;
 	ch->ptype() = PT_ZRP;
@@ -431,7 +450,7 @@ AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
 	ch->iface() = -2;
 	ch->error() = 0;
 	ch->addr_type() = NS_AF_INET;
-	ch->next_hop_ = rt->rt_nexthop;
+	ch->next_hop_ = ipdst;							// Need rationale TODO
 	ch->prev_hop_ = index;
 	ch->direction() = hdr_cmn::DOWN;
 
