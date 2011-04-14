@@ -34,6 +34,8 @@ private:
 
 	zrp_nodelist dwnstrm_n;				    // Downstream Neighbor List
 	zrp_nodelist dwnstrm_pnodes;			//  Downstream Peripheral Nodes List
+
+
 };
 
 //		Bordercast Tree Table
@@ -45,6 +47,7 @@ public:
 	zrp_btt_entry*	head() { return btthead.lh_first; }
 private:
 	LIST_HEAD(zrp_btthead, zrp_btt_entry) btthead;
+
 };
 
 

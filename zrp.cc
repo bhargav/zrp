@@ -177,13 +177,21 @@ void ZRP::recvLinkState(Packet *p) {
 	updateIntraRoutingTable(p, lh->link_dst, TRUE, lh->link_state_id);
 }
 
-void ZRP::recvExtension(Packet *p) {
+void ZRP::recvExtension(Packet *p)
+{
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ip = HDR_IP(p);
+	struct hdr_zrp *zh  = HDR_ZRP(p);
+	struct hdr_zrp_query *zq = HDR_ZRP_QUERY(p);
 
 #ifdef DEBUG
 	fprintf(stderr, "%d - %s: received a QUERY EXTENSION\n", index, __FUNCTION__);
 #endif
+
+	if(index!=zq->query_dst)
+	{
+		//
+	}
 }
 
 void ZRP::recvQuery(Packet *p)
@@ -362,7 +370,7 @@ ZRP::sendQueryExtension(nsaddr_t dst) {
 }
 
 void
-AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
+ZRP::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
 		u_int32_t rpseq, u_int32_t lifetime, double timestamp)
 {
 	Packet *p = Packet::alloc();
@@ -406,6 +414,50 @@ AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
 }
 
 void
+ZRP::sendBRP(Packet *pkt)
+{
+	Packet *p = Packet::alloc();
+	struct hdr_cm *ch = HDR_CMN(p);
+	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp *zr = HDR_ZRP(p);
+	struct hdr_zrp_brp *rh = HDR_ZRP_BRP(p);
+	struct hdr_zrp_query *rk = HDR_ZRP_QUERY(pkt);
+
+	*(rh->hdr_zrp_query) = *rk ;
+	rh->src_addr = index;
+
+	zr->ah_type = ZRPTYPE_BRP;
+
+	ch->ptype() = PT_ZRP;
+	ch->size() = IP_HDR_LEN + rh->size();
+	ch->iface() = -2;
+	ch->error() = 0;
+	ch->addr_type() = NS_AF_NONE;
+	ch->prev_hop_ = index;          // AODV hack
+
+	ih->saddr() = index;
+
+	ih->sport() = RT_PORT;
+	ih->dport() = RT_PORT;
+
+
+
+
+	zrp_rt_entry *rt = rtable.rthead.lh_first;
+
+	for (; rt ; rt = rt->rt_link.le_next)
+	{
+		if (rt->zrp_peripheral = TRUE)
+		{
+			//			ih->daddr() = next hop
+			rh->des_addr = rt->zrp_dst;
+			Scheduler::instance().schedule(target_, p, 0.);
+		}
+	}
+}
+
+
+void
 ZRP::sendHello() {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
@@ -441,6 +493,7 @@ ZRP::sendHello() {
 
 	Scheduler::instance().schedule(target_, p, 0.0);
 }
+
 
 void
 ZRP::recvHello(Packet *p) {
@@ -683,3 +736,4 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 
 	former_routing_zones.nl_purge();
 }
+

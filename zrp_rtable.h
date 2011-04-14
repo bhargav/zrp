@@ -48,6 +48,7 @@ private:
 	zrp_node_list routes;
 	zrp_metric_list route_metrics;
 	bool zrp_intrazone;
+	bool zrp_peripheral;
 
 };
 
@@ -62,6 +63,7 @@ public:
 	void 			rt_delete(nsaddr_t id);
 	zrp_rt_entry*	rt_lookup(nsaddr_t id);
 	bool		    rt_isIntra(nsaddr_t id);
+	bool		    bt_isPeripheral(nsaddr_t id);
 private:
 	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 

@@ -76,3 +76,14 @@ bool zrp_rtable::rt_isIntra(nsaddr_t id)
 	}
 	return FALSE;
 }
+
+bool zrp_rtable::rt_isPeripheral(nsaddr_t id)
+{
+	zrp_rt_entry *rt = rthead.lh_first;
+
+	for (; rt ; rt = rt->rt_link.le_next) {
+		if (rt->zrp_dst = id)
+			return rt->zrp_peripheral;
+	}
+	return FALSE;
+}
