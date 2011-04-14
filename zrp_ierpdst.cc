@@ -18,6 +18,7 @@ query_cache_entry::~query_cache_entry() {
 query_cache_entry*
 query_cache::qc_insert(nsaddr_t query_src) {
 	query_cache_entry *qe = qc_lookup(query_src);
+
 	if (qe == 0) {
 		qe = new query_cache_entry;
 		assert(qe);

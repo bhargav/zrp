@@ -74,9 +74,10 @@ protected:
 	int initialized() { return 1 && target_; }
 
 	nsaddr_t 			index;					// IP Address of this node
-	u_int32_t 			seqno;					// Sequence Number
-	u_int8_t			zone_radius;			// Zone Radius
-	u_int16_t			my_state_id;
+	uint32_t 			seqno;					// Sequence Number
+	uint8_t				zone_radius;			// Zone Radius
+	uint16_t			my_state_id;
+	uint16_t			my_reply_id;
 
 	bool 				cum_status;				// Updating Routing Table
 
@@ -93,7 +94,7 @@ protected:
 	void				sendQuery(nsaddr_t);
 	void				sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status);
 	void				sendQueryExtension(nsaddr_t);
-	void				sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,u_int32_t rpseq, double timestamp);
+	void				sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,u_int32_t rpseq, double timestamp,nsaddr_t*);
 	void				sendHello();
 
 	// Packet Reception Routines
@@ -101,6 +102,7 @@ protected:
 	void 				recvLinkState(Packet *p);
 	void 				recvHello(Packet *p);
 	void				recvQuery(Packet *p);
+	void				recvReply(Packet *p);
 	void 				recvExtension(Packet *p);
 
 	// Routing Table

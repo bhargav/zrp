@@ -117,6 +117,7 @@ ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),rtable(),lktable
 	seqno = 2;										// From AODV need rationale
 	zone_radius = 2;
 	my_state_id = 1;
+	my_reply_id = 1;
 	cum_status = ZRP_UPDATE_COMPLETE;
 }
 
@@ -175,6 +176,7 @@ void ZRP::recvLinkState(Packet *p) {
 	struct hdr_zrp_linkstate *lh = HDR_ZRP_LINKSTATE(p);
 
 	updateIntraRoutingTable(p, lh->link_dst, TRUE, lh->link_state_id);
+	rt_dump();
 }
 
 void ZRP::recvExtension(Packet *p) {
@@ -192,10 +194,10 @@ void ZRP::recvQuery(Packet *p)
 	struct hdr_zrp_query *rq = HDR_ZRP_QUERY(p);
 	zrp_rt_entry *rt;
 
-	printf("Received query from %d", rq->query_src_addr);
+	printf("\nReceived query from %d by %d", rq->query_src_addr, index);
 
 	// Drop, if i am source.
-	if(rq->query_src_addr = index) {
+	if(rq->query_src_addr == index) {
 		Packet::free(p);
 		return;
 	}
@@ -208,41 +210,59 @@ void ZRP::recvQuery(Packet *p)
 	int count;
 
 	zrp_nodelist prev_hops;
-	for (int i = 0; i <= rq->num_nodes - 1; i++) {	// current_hop_ptr
+	printf(" current %d ", rq->current_hop_ptr);
+	for (int i = 0; i <= rq->current_hop_ptr - 1; i++) {	// current_hop_ptr
 		prev_hops.nl_insertNode(rq->route[i]);
 	}
 
 	query_cache_entry *qce = tempqc.qc_insert(rq->query_src_addr);
-	if (qce == 0) {
+	qce->query_id = rq->query_id;
+	qce->hop_count = rq->hop_count;
 
-		qce->query_id = rq->query_id;
-		qce->hop_count = rq->hop_count;
+	tempqc.qc_dump();
+
+	zrp_rt_entry *rten;
+	//	printf(" qsc %d ", rq->query_src_addr);
+
+	rten = rtable.rt_lookup(rq->query_src_addr);
+	if (rten != 0)
+		rtable.rt_delete(rq->query_src_addr);
+	rten = rtable.rt_add(rq->query_src_addr);
+	//	printf("Inserting to rtable entry %d", rq->query_src_addr);
+
+	rten->zrp_intrazone = FALSE;
+
+	zrp_nodelist_entry *nle = prev_hops.head();
+	for (count = 0; nle; nle = nle->nl_link.le_next, count++) {
+		qce->prev_hop[count] = nle->node;
 	}
 
-	if (rtable.rt_lookup(rq->query_src_addr) == 0) {
-		rt = rtable.rt_add(rq->query_src_addr);
-		rt->zrp_intrazone = FALSE;
-
-		zrp_nodelist_entry *nle = prev_hops.head();
-		for (count = 0; nle; nle = nle->nl_link.le_next, count++) {
-			qce->prev_hop[count] = nle->node;
-		}
-		for (int j = count - 1; j > 0; j ++) {
-			rt->routes.nl_insertNode(qce->prev_hop[count]);
-		}
+	for (int j = count - 1; j > 0; j ++) {
+		//			rten->routes.nl_insertNode(qce->prev_hop[count]);
+		zrp_nodelist_entry *nlen = new zrp_nodelist_entry;
+		nlen->node = qce->prev_hop[count];
+		LIST_INSERT_HEAD(&(rten->routes), nlen, nl_link);
+		//
 	}
+
 	// Extraction and updating routing table complete
 
-	if (rtable.rt_isIntra(rq->query_dst)) {
-		// destination is within this node's routing zone
-		// send query extension TODO
-		sendQueryExtension(rq->query_dst);
-	}
-	else {
-		// destination is outside this node's routing zone
-		// Send packet to BRP
-	}
+	if (rtable.rt_lookup(rq->query_dst)) {
+		if (rtable.rt_isIntra(rq->query_dst)) {
+			// destination is within this node's routing zone
+			// send query extension TODO
+			sendQueryExtension(rq->query_dst);
 
+			zrp_rt_entry *rten = rtable.rt_lookup(rq->query_src_addr);
+			if (rten)
+				sendReply(index, rq->hop_count, rq->query_src_addr, my_reply_id, CURRENT_TIME, rq->route);	// Check Not COrrect
+		}
+		else {
+			// destination is outside this node's routing zone
+			// Send packet to BRP
+		}
+	}
+	rt_dump();
 }
 
 void
@@ -306,14 +326,14 @@ ZRP::sendQuery(nsaddr_t dst) {
 	ch->prev_hop_ = index;
 
 	ih->saddr() = index;
-	ih->daddr() = IP_BROADCAST;
+	ih->daddr() = IP_BROADCAST;		// Query is bordercasted
 	ih->sport() = RT_PORT;
 	ih->dport() = RT_PORT;
 
 	rqh->query_src_addr = index;
 	rqh->query_type = ZRPTYPE_QUERY;
 	rqh->hop_count = 0;
-	rqh->current_hop_ptr = 0;
+	rqh->current_hop_ptr = 1;
 
 	Scheduler::instance().schedule(target_, p, 0.);
 }
@@ -383,58 +403,63 @@ ZRP::sendQueryExtension(nsaddr_t dst) {
 			++route_request, index, rt->rt_dst);
 #endif // DEBUG
 
+	if (rt) {
+		zh->ah_type = ZRPTYPE_QUERYEXTENSION;
 
-	zh->ah_type = ZRP_QUERYEXTENSION;
+		ch->ptype() = PT_ZRP;
+		ch->size() = IP_HDR_LEN + rqh->size();
+		ch->iface() = -2;
+		ch->error() = 0;
+		ch->addr_type() = NS_AF_NONE;
+		ch->prev_hop_ = index;
+		ch->next_hop_ = rt->routes.lh_first->node;
 
-	ch->ptype() = PT_ZRP;
-	ch->size() = IP_HDR_LEN + rqh->size();
-	ch->iface() = -2;
-	ch->error() = 0;
-	ch->addr_type() = NS_AF_NONE;
-	ch->prev_hop_ = index;
-	ch->next_hop_ = rt->routes.head()->node;
+		ih->saddr() = index;
+		ih->daddr() = rt->routes.lh_first->node;
+		ih->sport() = RT_PORT;
+		ih->dport() = RT_PORT;
 
-	ih->saddr() = index;
-	ih->daddr() = rt->routes.head()->node;
-	ih->sport() = RT_PORT;
-	ih->dport() = RT_PORT;
+		rqh->query_src_addr = index;
+		rqh->query_id = seqno;
+		rqh->query_dst = dst;
+		rqh->query_type = ZRPTYPE_QUERYEXTENSION;
+		rqh->hop_count = 0;
+		rqh->current_hop_ptr = 1;
 
-	rqh->query_src_addr = index;
-	rqh->query_dst = dst;
-	rqh->query_type = ZRPTYPE_QUERYEXTENSION;
-	rqh->hop_count = 0;
-	rqh->current_hop_ptr = 1;
+		rqh->route[0] = index;
 
-	rqh->route[0] = index;
+		int i;	ih->daddr() = IP_BROADCAST;
 
-	zrp_nodelist_entry *rtentry = rt->routes.head();
-	for (int i= 1; rtentry; rtentry = rtentry->nl_link.le_next ) {
-		rqh->route[i] = rtentry->node;
-		i++;
+		zrp_nodelist_entry *rtentry = rt->routes.lh_first;
+		for (i= 1; rtentry; rtentry = rtentry->nl_link.le_next ) {
+			rqh->route[i] = rtentry->node;
+			i++;
+		}
+
+		rqh->num_nodes = i;
+		ih->ttl_ = i + 1;
+		rqh->ttl = i + 1;
+		rqh->num_dest = 1;
+
+		Scheduler::instance().schedule(target_, p, 0.);
 	}
-
-	rqh->num_nodes = i;
-	ih->ttl_ = i + 1;
-	rqh->ttl = i + 1;
-	rqh->num_dest = 1;
-
-	Scheduler::instance().schedule(target_, p, 0.);
 }
 
 void
-ZRP::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst, u_int32_t rpseq, double timestamp)
+ZRP::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst, u_int32_t rpseq, double timestamp,nsaddr_t* route_)
 {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_zrp *zh = HDR_ZRP(p);
 	struct hdr_zrp_query *rp = HDR_ZRP_QUERY(p);
-	zrp_rt_entry *rt = rtable.rt_lookup(ipdst);
+
+	//	zrp_rt_entry *rt = rtable.rt_lookup(rpdst); // Inject path from temporary cache
 
 #ifdef DEBUG
 	fprintf(stderr, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
-	assert(rt);
+	//	assert(rt);
 
 	zh->ah_type = ZRPTYPE_REPLY;
 
@@ -443,6 +468,8 @@ ZRP::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst, u_int32_t rp
 	rp->query_id = rpseq;
 	rp->query_src_addr = index;
 	rp->rq_timestamp = timestamp;
+	for (int j = 0; j < ZRP_MAX_ERRORS; j++)
+		rp->route[j] = *(route_ + j);
 
 	// ch->uid() = 0;
 	ch->ptype() = PT_ZRP;
@@ -458,7 +485,6 @@ ZRP::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst, u_int32_t rp
 	ih->daddr() = ipdst;
 	ih->sport() = RT_PORT;
 	ih->dport() = RT_PORT;
-	//ih->ttl_ = NETWORK_DIAMETER;
 
 	Scheduler::instance().schedule(target_, p, 0.);
 
@@ -505,7 +531,7 @@ void
 ZRP::recvHello(Packet *p) {
 	struct hdr_zrp_query *qh = HDR_ZRP_QUERY(p);
 
-	printf("Received hello %d with %d radius \n", index, zone_radius);
+	//	printf("Received hello %d with %d radius \n", index, zone_radius);
 
 	ZRP_Neighbor *nb;
 	nb = nb_lookup(qh->query_src_addr);
@@ -539,8 +565,7 @@ ZRP::nb_insert(nsaddr_t id) {
 	nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
 	LIST_INSERT_HEAD(&nbhead, nb, nb_link);
 	seqno += 2;            	 // set of neighbors changed -- TODO
-	assert ((seqno%2) == 0);
-
+	//	assert ((seqno%2) == 0);
 	//	nb_dump();
 	// Neighbor Found
 
@@ -615,8 +640,11 @@ void ZRP::neighborFound(nsaddr_t id)
 		new_neighbour_list.nl_insertNode(id);
 
 	bool fl[8] = {0,0,0,0,0,0,0,0};
-	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP);
-	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
+	//	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP);
+	//	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
+
+	//	if (index == 0)
+	sendQuery(id);
 }
 
 void ZRP::neighborLost(nsaddr_t id)
@@ -634,6 +662,11 @@ void
 ZRP::rt_dump()
 {
 	printf("Dumping Routing Table for %d at %.17f -- ", index, CURRENT_TIME);
+	zrp_rt_entry *rt = rtable.rthead.lh_first;
+	for (; rt; rt=rt->rt_link.le_next) {
+		printf(" [ d:%d inzone:%d r: ]", rt->zrp_dst, rt->zrp_intrazone);//, rt->routes.lh_first->node);
+	}
+	printf(" -- done \n");
 }
 
 void
