@@ -3,7 +3,6 @@
 zrp_lst_entry::zrp_lst_entry() {
 	link_src = 0;
 	zone_radius = 0;
-	LIST_INIT(&lslisthead);
 }
 
 bool
@@ -11,6 +10,7 @@ zrp_lstable::lst_insert(nsaddr_t link_src, nsaddr_t link_dst, nsaddr_t subnet_ma
 
 
 	bool new_link = FALSE;
+	bool isPresent = TRUE;
 	zrp_lst_entry *le = lst_lookup(link_src);
 
 	if (le == 0)
@@ -19,40 +19,54 @@ zrp_lstable::lst_insert(nsaddr_t link_src, nsaddr_t link_dst, nsaddr_t subnet_ma
 		le->link_src = link_src;
 		le->zone_radius = radius;
 		new_link = TRUE;
+		isPresent = FALSE;
 	}
 
 	assert(le);
 
-	ls_info_entry *lsie = new ls_info_entry;
-	lsie->link_dst = link_dst;
-	lsie->forwarded = FALSE;
-	lsie->link_subnet = subnet_mask;
-	lsie->link_status = *(flags + 4);
+	std::vector<lsinfo_entry>::iterator it;
+	bool inserted = FALSE;
+	for (it=le->lsinfo.begin(); it!=le->lsinfo.end(); ++it) {
+		if ((*it).lst_id = state_id) {
+			inserted = TRUE;
+			break;
+		}
+	}
 
-	lsinfo_entry *lsi = new lsinfo_entry;
-	lsi->lst_id = state_id;
+	ls_subentry *sb = new ls_subentry;
+	sb->forwarded = FALSE;
+	sb->link_dst = link_dst;
+	sb->link_status = *(flags + 4);
+	sb->link_subnet = 0;
+	if (inserted) {
 
-	LIST_INSERT_HEAD( &(lsi->ls_info), lsie, ls_info_link);
+		(*it).ls_info.push_back(*sb);
+	}
+	else {
+		lsinfo_entry *lse = new lsinfo_entry;
+		lse->lst_id = link_src;
+		lse->ls_info.push_back(*sb);
+		le->lsinfo.push_back(*lse);
+	}
 
-	LIST_INSERT_HEAD(&(le->lslisthead), lsi, lsinfo_link);
+	if(isPresent == FALSE)
+		lshead.push_back(le);
 
-	LIST_INSERT_HEAD(&lst_head, le, lst_link);
-
-//	printf("Here %d and %d", lst_head.lh_first->link_src, lst_head.lh_first->lslisthead.lh_first->ls_info.lh_first->link_dst);
 	return new_link;
 }
 
 zrp_lst_entry*
 zrp_lstable::lst_lookup(nsaddr_t id) {
-	zrp_lst_entry *le = lst_head.lh_first;
-
-	for (; le; le = le->lst_link.le_next) {
-		if (le->link_src == id)
-			break;
+	std::vector<zrp_lst_entry*>::iterator itr;
+	for(itr = lshead.begin(); itr != lshead.end(); ++itr) {
+		if ((*itr)->link_src == id) {
+			return (*itr);
+		}
 	}
-	return le;
+	return NULL;
 }
 
+/*
 void
 zrp_lstable::lst_delete(nsaddr_t id) {
 	zrp_lst_entry *le = lst_head.lh_first;
@@ -66,23 +80,23 @@ zrp_lstable::lst_delete(nsaddr_t id) {
 	}
 
 }
-
+*/
 void
 zrp_lstable::lst_dump() {
 	printf("Dumping LST -- ");
-	zrp_lst_entry *le = lst_head.lh_first;
-	if (le != 0) {
-		printf(" { s : %d - r = %d -", le->link_src, le->zone_radius);
-		lsinfo_entry *lse = le->lslisthead.lh_first;
-		for (; lse; lse=lse->lsinfo_link.le_next) {
-			printf("[ sid : %d -", lse->lst_id);
-			ls_info_entry *lsie = lse->ls_info.lh_first;
-			for (; lsie; lsie = lsie->ls_info_link.le_next) {
-				printf("-( d : %d - msk : %d - frwd : %d )-", lsie->link_dst, lsie->link_subnet, lsie->forwarded);
+	std::vector<zrp_lst_entry*>::iterator mit;
+	for (mit = lshead.begin(); mit != lshead.end(); ++mit) {
+		printf(" { s : %d - r = %d -", (*mit)->link_src, (*mit)->zone_radius);
+		std::vector<lsinfo_entry>::iterator it;
+		std::vector<ls_subentry>::iterator suit;
+		for(it = (*mit)->lsinfo.begin(); it != (*mit)->lsinfo.end(); ++it) {
+			printf("[ sid : %d -", (*it).lst_id);
+			for(suit = (*it).ls_info.begin(); suit != (*it).ls_info.end(); ++suit) {
+				printf("-( d : %d - msk : %d - frwd : %d st : %s)-", (*suit).link_dst, (*suit).link_subnet, (*suit).forwarded, ((*suit).link_status ? "UP ": "DOWN" ));
 			}
-			printf("- ]");
 		}
 		printf(" } ");
 	}
 	printf(" -- done \n");
 }
+

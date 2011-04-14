@@ -185,7 +185,7 @@ void ZRP::recvLinkState(Packet *p) {
 	struct hdr_zrp *zh = HDR_ZRP(p);
 	struct hdr_zrp_linkstate *lh = HDR_ZRP_LINKSTATE(p);
 
-	updateIntraRoutingTable(p, lh->link_dst, TRUE, lh->link_state_id);
+	updateIntraRoutingTable(p, lh->link_dst, FALSE, lh->link_state_id);
 	rt_dump();
 }
 
@@ -208,7 +208,7 @@ void ZRP::recvExtension(Packet *p) {
 	// ih->ttl_ --; Done in recv();
 	rq->ttl--;
 	rq->hop_count++;
-
+	/*
 	// Extract route from packet and record to previous hops
 	int count;
 
@@ -260,7 +260,7 @@ void ZRP::recvExtension(Packet *p) {
 
 			Scheduler::instance().schedule(target_, p, 0.);
 		}
-	}
+	}*/
 }
 
 void ZRP::recvQuery(Packet *p)
@@ -280,7 +280,7 @@ void ZRP::recvQuery(Packet *p)
 	// ih->ttl_ --; Done in recv();
 	rq->ttl--;
 	rq->hop_count++;
-
+	/*
 	// Extract route from packet and record to previous hops
 	int count;
 
@@ -337,7 +337,7 @@ void ZRP::recvQuery(Packet *p)
 			// Send packet to BRP
 		}
 	}
-	rt_dump();
+	rt_dump(); */
 }
 
 void
@@ -487,10 +487,10 @@ ZRP::sendQueryExtension(nsaddr_t dst) {
 		ch->error() = 0;
 		ch->addr_type() = NS_AF_NONE;
 		ch->prev_hop_ = index;
-		ch->next_hop_ = rt->routes.lh_first->node;
+		//		ch->next_hop_ = rt->routes.lh_first->node; TODO
 
 		ih->saddr() = index;
-		ih->daddr() = rt->routes.lh_first->node;
+		//		ih->daddr() = rt->routes.lh_first->node; TODO
 		ih->sport() = RT_PORT;
 		ih->dport() = RT_PORT;
 
@@ -505,11 +505,11 @@ ZRP::sendQueryExtension(nsaddr_t dst) {
 
 		int i;	ih->daddr() = IP_BROADCAST;
 
-		zrp_nodelist_entry *rtentry = rt->routes.lh_first;
-		for (i= 1; rtentry; rtentry = rtentry->nl_link.le_next ) {
-			rqh->route[i] = rtentry->node;
-			i++;
-		}
+		//		zrp_nodelist_entry *rtentry = rt->routes.lh_first;
+		//		for (i= 1; rtentry; rtentry = rtentry->nl_link.le_next ) {
+		//			rqh->route[i] = rtentry->node;
+		//			i++;
+		//		}TODO
 
 		rqh->num_nodes = i;
 		ih->ttl_ = i + 1;
@@ -714,21 +714,56 @@ void ZRP::neighborFound(nsaddr_t id)
 	if (nh == 0)
 		new_neighbour_list.nl_insertNode(id);
 
-	bool fl[8] = {0,0,0,0,0,0,0,0};
-	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP,IP_BROADCAST);
+	zrp_rt_entry *nben = rtable.rt_lookup(id);
+	if (!nben)
+		rtable.rt_delete(id);
+
+	nben = rtable.rt_add(id);
+	if (zone_radius >=1 )
+		nben->zrp_intrazone = TRUE;
+	nben->route.push_back(id);
+
+	rt_dump();
+
+	//	bool fl[8] = {0,0,0,0,1,0,0,0};
+	//	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP,IP_BROADCAST);
+
+
 	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
 
-	//	if (index == 0)
-	//	sendQuery(id);
+	lktable.lst_dump();
 }
 
 void ZRP::neighborLost(nsaddr_t id)
 {
 	printf("Neighbor Lost at %.17f from %d : %d \n", CURRENT_TIME, index, id);
-	zrp_nodelist_entry *nh = new_neighbour_list.nl_lookup(id);
 
+	zrp_nodelist_entry *nh = new_neighbour_list.nl_lookup(id);
 	if (nh != 0)
 		new_neighbour_list.nl_delete(id);
+
+	// Routing Table Cleanup
+	rtable.rt_delete(id);
+	zrp_rt_entry *rt = rtable.head();
+
+	std::vector<nsaddr_t> temp;
+	std::vector<nsaddr_t>::iterator ii;
+	for (; rt; rt=rt->rt_link.le_next) {
+		for(ii = rt->route.begin(); ii!= rt->route.end(); ++ii) {
+			if (*ii == id) {
+				temp.push_back(*ii);
+				break;
+			}
+		}
+	}
+
+	for(ii = temp.begin(); ii!=temp.end(); ++ii) {
+		rtable.rt_delete(*ii);
+	}
+	// Routing Table Cleanup Complete
+
+	rt_dump();
+	lktable.lst_dump();
 
 	updateIntraRoutingTable(NULL, id, 0, ZRP_DOWN);
 }
@@ -737,9 +772,14 @@ void
 ZRP::rt_dump()
 {
 	printf("Dumping Routing Table for %d at %.17f -- ", index, CURRENT_TIME);
-	zrp_rt_entry *rt = rtable.rthead.lh_first;
+	zrp_rt_entry *rt = rtable.head();
 	for (; rt; rt=rt->rt_link.le_next) {
-		printf(" [ d:%d inzone:%d r: ]", rt->zrp_dst, rt->zrp_intrazone);//, rt->routes.lh_first->node);
+		printf(" [ d:%d inzone:%d r: ", rt->zrp_dst, rt->zrp_intrazone);
+		std::vector<nsaddr_t>::reverse_iterator rii;
+		for(rii=rt->route.rbegin(); rii!=rt->route.rend(); ++rii)  {
+			printf("%d - ", *rii);
+		}
+		printf(" ]");
 	}
 	printf(" -- done \n");
 }
@@ -821,52 +861,112 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 
 	if (pending_lst_list.nl_isempty() && (cum_status == ZRP_UPDATE_IN_PROGRESS)) {
 
-		// Do Routing Table Mojo TODO
+		// Do Routing Table
+		zrp_rt_entry *rtentry = rtable.head();
+		for (; rtentry; rtentry = rtentry->rt_link.le_next) {
+			if (rtentry->zrp_intrazone)
+				former_routing_zones.nl_insertNode(rtentry->zrp_dst);
+		}
 
-		// Rebuild Routing Table Mojo TODO
+		// Rebuild Routing Table
+		bool rebuild = TRUE;
+		std::vector<nsaddr_t> temp;
+		std::vector<nsaddr_t>::iterator iter;
+		std::vector<zrp_lst_entry*>::iterator lsmit;
+		std::vector<lsinfo_entry>::iterator initer;
+		std::vector<ls_subentry>::iterator sbit;
+
+		while(rebuild) {
+
+			// Remove entries for IntraZone Nodes
+			for (; rtentry; rtentry = rtentry->rt_link.le_next) {
+				if (rtentry->zrp_intrazone)
+					temp.push_back(rtentry->zrp_dst);
+			}
+
+			for (iter = temp.begin(); iter != temp.end(); ++iter) {
+				rtable.rt_delete((*iter));
+			}
+
+			// Assuming all links in LST are UP links only and DOWN links have been removed
+			zrp_rt_entry *rt;
+
+			std::vector<nsaddr_t> nodes;
+			for (lsmit = lktable.lshead.begin(); lsmit != lktable.lshead.end(); ++lsmit) {
+				if ((*lsmit)->link_src == index) {
+					for (initer = (*lsmit)->lsinfo.begin(); initer != (*lsmit)->lsinfo.end(); ++initer) {
+						for (sbit = (*initer).ls_info.begin(); sbit != (*initer).ls_info.end(); ++sbit) {
+							if ((*sbit).link_status) {
+								nodes.push_back((*sbit).link_dst);
+
+								rt = rtable.rt_add((*sbit).link_dst);
+								rt->zrp_intrazone = TRUE;					// Assuming Zone_Radius >= 1 (i.e. atleast neighbors are in the zone)
+								rt->route.push_back((*sbit).link_dst);
+							}
+						}
+					}
+				}
+			}
+
+			// Recompute entries for IntraZone Nodes in Routing Table
+			std::vector<nsaddr_t>::iterator ii;
+			std::vector<nsaddr_t> nodes_new;
+			std::vector<nsaddr_t> level;
+			level.push_back(index);
+			int i = 1;
+
+			for (lsmit = lktable.lshead.begin(); lsmit != lktable.lshead.end(); ++lsmit) {
+				// Compute Route to each node in LST from Link State Table
+
+				// Check is size of route is less than zone radius
+
+				// Add to Routing Table as IntraZone
+			}
+
+			rebuild = FALSE; // Update Link State Tables
+		}
 	}
 
 	// Construct Bordercast Tree -- BANNED
 
 	// broadcast_link_state_updates
 
-	zrp_nodelist_entry *nle;
-//	nle = new_neighbour_list.head();
-//	for (; nle; nle = nle->nl_link.le_next) {
-//		// Send Link State Table TODO
-//	}
+	std::vector<zrp_lst_entry*>::iterator mit;
+	std::vector<lsinfo_entry>::iterator lsitr;
+	std::vector<ls_subentry>::iterator it;
 
-//	zrp_lst_entry *lsen = lktable.lst_head.lh_first;
+	for (mit = lktable.lshead.begin(); mit != lktable.lshead.end(); ++mit) {
 
-//	for (; lsen; lsen = lsen->lst_link.le_next) {
-//	if (lsen) {
-//		lsinfo_entry *lie = lsen->lslisthead.lh_first;
+		for (lsitr = (*mit)->lsinfo.begin(); lsitr != (*mit)->lsinfo.end(); ++lsitr) {
 
-//		for (; lie; lie = lie->lsinfo_link.le_next) {
-//			ls_info_entry *le = lie->ls_info.lh_first;
-//			printf("Level1");
-//			for(; le; le=le->ls_info_link.le_next) {
-//
-//				nle = new_neighbour_list.head();
-//				for (; nle; nle = nle->nl_link.le_next) {
-//					// Send Link State Table TODO
-//					bool flg[8] = {0, 0,0,le->link_status,0,0,0,0};
-//					sendLinkState(lsen->link_src, le->link_dst, lie->lst_id, lsen->zone_radius, flg, 0, le->link_status, nle->node);
-//				}
-//
-//				if (le->forwarded = FALSE) {
-//					bool flg[8] = {0, 0,0,le->link_status,0,0,0,0};
-//					sendLinkState(lsen->link_src, le->link_dst, lie->lst_id, lsen->zone_radius, flg, 0, le->link_status, IP_BROADCAST);
-//				}
-//				le->forwarded = TRUE;
-//			}
-//		}
-//	}
+			for (it = (*lsitr).ls_info.begin(); it != (*lsitr).ls_info.end(); ++it) {
+
+				// Send Link State Table to new neighbors
+				zrp_nodelist_entry *nle;
+				nle = new_neighbour_list.head();
+				for (; nle; nle = nle->nl_link.le_next) {
+					bool flg[8] = {0, 0,0,0,(*it).link_status,0,0,0};
+					sendLinkState((*mit)->link_src, (*it).link_dst, (*lsitr).lst_id, (*mit)->zone_radius, flg, 0, (*it).link_status, nle->node);
+				}
+				// Done
+
+				// Broadcast Previously unforwarded link state entries
+				if ((*it).forwarded = FALSE) {
+					bool flg[8] = {0, 0, 0, 0, (*it).link_status, 0, 0, 0};
+					sendLinkState((*mit)->link_src, (*it).link_dst, (*lsitr).lst_id, (*mit)->zone_radius, flg, 0, (*it).link_status, IP_BROADCAST);
+				}
+				(*it).forwarded = TRUE;
+				// Broadcasting done
+			}
+		}
+
+	}
 
 	new_neighbour_list.nl_purge();
 
 	cum_status = ZRP_UPDATE_COMPLETE;
 
+	zrp_nodelist_entry *nle;
 	nle = former_routing_zones.head();
 	for (; nle; nle = nle->nl_link.le_next) {
 
@@ -874,32 +974,31 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 
 		if (rtable.rt_lookup(nle->node) == 0) {
 			// Report Lost Nodes to IERP
+
+			// Routing Table Cleanup
+
+			std::vector<nsaddr_t> temp;
+			std::vector<nsaddr_t>::iterator ii;
+			zrp_rt_entry *rt = rtable.head();
 			nsaddr_t remv = nle->node;
-			bool remove;
-			zrp_rt_entry *it = rtable.head();
-			zrp_rt_entry *temp;
-
-			for (; it; it=it->rt_link.le_next) {
-				remove = FALSE;
-
-				if (it->zrp_intrazone == TRUE) {
-					zrp_nodelist_entry *n = it->routes.lh_first;
-					for (; n ; n = n->nl_link.le_next) {
-						if (n->node == remv) {
-							remove = TRUE;
+			for (; rt; rt=rt->rt_link.le_next) {
+				if (rt->zrp_intrazone == TRUE) {
+					for(ii = rt->route.begin(); ii!= rt->route.end(); ++ii) {
+						if (*ii == remv) {
+							temp.push_back(*ii);
 							break;
 						}
 					}
 
-					if (remove == TRUE) {
-						temp = it->rt_link.le_next;
-						rtable.rt_delete(it->zrp_dst);
-						it = temp;
+					for(ii = temp.begin(); ii!=temp.end(); ++ii) {
+						rtable.rt_delete(*ii);
 					}
+
 				}
+
+				// Routing Table Cleanup Complete
 			}
 		}
-
 	}
 
 	former_routing_zones.nl_purge();

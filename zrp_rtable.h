@@ -11,6 +11,8 @@
 #include <zrp/zrp_iarpdst.h>
 #include <zrp/zrp_ierpdst.h>
 
+#include <vector>
+
 #define CURRENT_TIME		Scheduler::instance().clock()
 #define INFINITY2			0xff
 
@@ -38,16 +40,13 @@ class zrp_rt_entry {
 	friend class ZRP;
 public:
 	zrp_rt_entry();
-	~zrp_rt_entry();
 
 private:
 
 	LIST_ENTRY(zrp_rt_entry) rt_link;
-
 	nsaddr_t zrp_dst;
 	nsaddr_t zrp_subnet;
-	zrp_node_list routes;
-//	zrp_metric_list route_metrics;
+	std::vector<nsaddr_t> route;
 	bool zrp_intrazone;
 
 };
@@ -63,9 +62,8 @@ public:
 	void 			rt_delete(nsaddr_t id);
 	zrp_rt_entry*	rt_lookup(nsaddr_t id);
 	bool		    rt_isIntra(nsaddr_t id);
-	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 private:
-
+	LIST_HEAD(zrp_rthead, zrp_rt_entry) rthead;
 };
 
 #endif
