@@ -45,6 +45,15 @@ private:
 	Event	intr;
 };
 
+class ZrpQueryTimer : public Handler {
+public:
+	ZrpQueryTimer(ZRP* a) : agent(a) {}
+	void	handle(Event*);
+private:
+	ZRP    *agent;
+	Event	intr;
+};
+
 class ZoneManagementTimer : public Handler {
 public:
 	ZoneManagementTimer(ZRP* a) : agent(a) {}
@@ -64,6 +73,7 @@ class ZRP: public Agent {
 	friend class ZoneManagementTimer;
 	friend class ZrpHelloTimer;
 	friend class ZrpNeighborTimer;
+	friend class ZrpQueryTimer;
 
 public:
 	ZRP(nsaddr_t);
@@ -92,7 +102,7 @@ protected:
 	// Packet Transmission Routines
 	void 				forward(zrp_rt_entry*, Packet*, double);
 	void				sendQuery(nsaddr_t);
-	void				sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status);
+	void				sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status, nsaddr_t broadcast);
 	void				sendQueryExtension(nsaddr_t);
 	void				sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,u_int32_t rpseq, double timestamp,nsaddr_t*);
 	void				sendHello();
@@ -128,6 +138,7 @@ protected:
 	// Timer Management
 	ZrpHelloTimer      	htimer;				// Hello Timer
 	ZrpNeighborTimer   	ntimer;				// Neighbor Table Management Timer
+	ZrpQueryTimer		qtimer;
 
 	// logging the contents of the routing databases
 	Trace 				*logtarget;

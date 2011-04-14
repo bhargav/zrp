@@ -44,6 +44,7 @@ ZRP::command(int argc, const char*const* argv) {
 
 			//	#ifndef AODV_LINK_LAYER_DETECTION
 			htimer.handle((Event*) 0);
+			qtimer.handle((Event*) 0);
 			ntimer.handle((Event*) 0);
 			//	#endif // LINK LAYER DETECTION
 
@@ -103,6 +104,15 @@ ZrpHelloTimer::handle(Event*) {
 }
 
 void
+ZrpQueryTimer::handle(Event*) {
+	if (agent->index == 40)
+		agent->sendQuery(50);
+	double interval = 50.0;
+	assert(interval >= 0);
+	Scheduler::instance().schedule(this, &intr, interval);
+}
+
+void
 ZrpNeighborTimer::handle(Event*) {
 	agent->nb_purge();
 	Scheduler::instance().schedule(this, &intr, 5 * HELLO_INTERVAL * Random::uniform());
@@ -111,7 +121,7 @@ ZrpNeighborTimer::handle(Event*) {
 /*
  * Constructor for ZRP class
  */
-ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones(),tempqc() {					// Need to assign a number from packet.h
+ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),qtimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones(),tempqc() {					// Need to assign a number from packet.h
 	//	bind("zone_radius", (int64_t *) &zone_radius);
 	index = id;
 	seqno = 2;										// From AODV need rationale
@@ -182,10 +192,75 @@ void ZRP::recvLinkState(Packet *p) {
 void ZRP::recvExtension(Packet *p) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ip = HDR_IP(p);
+	struct hdr_zrp_query *rq = HDR_ZRP_QUERY(p);
+	zrp_rt_entry *rt;
 
 #ifdef DEBUG
 	fprintf(stderr, "%d - %s: received a QUERY EXTENSION\n", index, __FUNCTION__);
 #endif
+
+	// Drop, if i am source.
+	if(rq->query_src_addr == index) {
+		Packet::free(p);
+		return;
+	}
+
+	// ih->ttl_ --; Done in recv();
+	rq->ttl--;
+	rq->hop_count++;
+
+	// Extract route from packet and record to previous hops
+	int count;
+
+	zrp_nodelist prev_hops;
+	printf(" current %d ", rq->current_hop_ptr);
+	for (int i = 0; i <= rq->current_hop_ptr - 1; i++) {	// current_hop_ptr
+		prev_hops.nl_insertNode(rq->route[i]);
+	}
+
+	query_cache_entry *qce = tempqc.qc_insert(rq->query_src_addr);
+	qce->query_id = rq->query_id;
+	qce->hop_count = rq->hop_count;
+
+	tempqc.qc_dump();
+
+	zrp_rt_entry *rten;
+	//	printf(" qsc %d ", rq->query_src_addr);
+
+	rten = rtable.rt_lookup(rq->query_src_addr);
+	if (rten != 0)
+		rtable.rt_delete(rq->query_src_addr);
+	rten = rtable.rt_add(rq->query_src_addr);
+	//	printf("Inserting to rtable entry %d", rq->query_src_addr);
+
+	rten->zrp_intrazone = FALSE;
+
+	zrp_nodelist_entry *nle = prev_hops.head();
+	for (count = 0; nle; nle = nle->nl_link.le_next, count++) {
+		qce->prev_hop[count] = nle->node;
+	}
+
+	for (int j = count - 1; j > 0; j ++) {
+		//			rten->routes.nl_insertNode(qce->prev_hop[count]);
+		zrp_nodelist_entry *nlen = new zrp_nodelist_entry;
+		nlen->node = qce->prev_hop[count];
+		LIST_INSERT_HEAD(&(rten->routes), nlen, nl_link);
+		//
+	}
+
+	// Extraction and updating routing table complete
+
+	if (rq->query_dst != index) {
+		zrp_rt_entry *r = rtable.rt_lookup(rq->query_dst);
+		if (r) {
+			nsaddr_t nexthop = r->routes.lh_first->node;
+			ch->next_hop_ = nexthop;
+			//			rq->nexthop = nexthop;
+			ip->daddr() = nexthop;
+
+			Scheduler::instance().schedule(target_, p, 0.);
+		}
+	}
 }
 
 void ZRP::recvQuery(Packet *p)
@@ -339,7 +414,7 @@ ZRP::sendQuery(nsaddr_t dst) {
 }
 
 void
-ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status) {
+ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_int8_t radius, bool* flags, nsaddr_t subnet_mask, bool link_status, nsaddr_t broadcast) {
 	Packet *p = Packet::alloc();
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
@@ -359,7 +434,7 @@ ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_i
 
 	ih->saddr() = index;
 	ih->ttl_ = 1;
-	ih->daddr() = IP_BROADCAST;
+	ih->daddr() = broadcast;
 	ih->sport() = RT_PORT;
 	ih->dport() = RT_PORT;
 
@@ -640,11 +715,11 @@ void ZRP::neighborFound(nsaddr_t id)
 		new_neighbour_list.nl_insertNode(id);
 
 	bool fl[8] = {0,0,0,0,0,0,0,0};
-	//	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP);
-	//	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
+	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP,IP_BROADCAST);
+	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
 
 	//	if (index == 0)
-	sendQuery(id);
+	//	sendQuery(id);
 }
 
 void ZRP::neighborLost(nsaddr_t id)
@@ -751,14 +826,42 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 		// Rebuild Routing Table Mojo TODO
 	}
 
-	// Construct Bordercast Tree
+	// Construct Bordercast Tree -- BANNED
 
 	// broadcast_link_state_updates
 
-	zrp_nodelist_entry *nle = new_neighbour_list.head();
-	for (; nle; nle = nle->nl_link.le_next) {
-		// Send Link State Table TODO
-	}
+	zrp_nodelist_entry *nle;
+//	nle = new_neighbour_list.head();
+//	for (; nle; nle = nle->nl_link.le_next) {
+//		// Send Link State Table TODO
+//	}
+
+//	zrp_lst_entry *lsen = lktable.lst_head.lh_first;
+
+//	for (; lsen; lsen = lsen->lst_link.le_next) {
+//	if (lsen) {
+//		lsinfo_entry *lie = lsen->lslisthead.lh_first;
+
+//		for (; lie; lie = lie->lsinfo_link.le_next) {
+//			ls_info_entry *le = lie->ls_info.lh_first;
+//			printf("Level1");
+//			for(; le; le=le->ls_info_link.le_next) {
+//
+//				nle = new_neighbour_list.head();
+//				for (; nle; nle = nle->nl_link.le_next) {
+//					// Send Link State Table TODO
+//					bool flg[8] = {0, 0,0,le->link_status,0,0,0,0};
+//					sendLinkState(lsen->link_src, le->link_dst, lie->lst_id, lsen->zone_radius, flg, 0, le->link_status, nle->node);
+//				}
+//
+//				if (le->forwarded = FALSE) {
+//					bool flg[8] = {0, 0,0,le->link_status,0,0,0,0};
+//					sendLinkState(lsen->link_src, le->link_dst, lie->lst_id, lsen->zone_radius, flg, 0, le->link_status, IP_BROADCAST);
+//				}
+//				le->forwarded = TRUE;
+//			}
+//		}
+//	}
 
 	new_neighbour_list.nl_purge();
 
@@ -767,8 +870,34 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 	nle = former_routing_zones.head();
 	for (; nle; nle = nle->nl_link.le_next) {
 
+		// Delete all routes in the table containing
+
 		if (rtable.rt_lookup(nle->node) == 0) {
 			// Report Lost Nodes to IERP
+			nsaddr_t remv = nle->node;
+			bool remove;
+			zrp_rt_entry *it = rtable.head();
+			zrp_rt_entry *temp;
+
+			for (; it; it=it->rt_link.le_next) {
+				remove = FALSE;
+
+				if (it->zrp_intrazone == TRUE) {
+					zrp_nodelist_entry *n = it->routes.lh_first;
+					for (; n ; n = n->nl_link.le_next) {
+						if (n->node == remv) {
+							remove = TRUE;
+							break;
+						}
+					}
+
+					if (remove == TRUE) {
+						temp = it->rt_link.le_next;
+						rtable.rt_delete(it->zrp_dst);
+						it = temp;
+					}
+				}
+			}
 		}
 
 	}

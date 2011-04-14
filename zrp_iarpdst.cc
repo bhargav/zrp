@@ -69,20 +69,20 @@ zrp_lstable::lst_delete(nsaddr_t id) {
 
 void
 zrp_lstable::lst_dump() {
-//	printf("Dumping LST -- ");
-//	zrp_lst_entry *le = lst_head.lh_first;
-//	if (le != 0) {
-//		printf(" { s : %d - r = %d -", le->link_src, le->zone_radius);
-//		lsinfo_entry *lse = le->lslisthead.lh_first;
-//		for (; lse; lse=lse->lsinfo_link.le_next) {
-//			printf("[ sid : %d -", lse->lst_id);
-//			ls_info_entry *lsie = lse->ls_info.lh_first;
-//			for (; lsie; lsie = lsie->ls_info_link.le_next) {
-//				printf("-( d : %d - msk : %d - frwd : %d )-", lsie->link_dst, lsie->link_subnet, lsie->forwarded);
-//			}
-//			printf("- ]");
-//		}
-//		printf(" } ");
-//	}
-//	printf(" -- done \n");
+	printf("Dumping LST -- ");
+	zrp_lst_entry *le = lst_head.lh_first;
+	if (le != 0) {
+		printf(" { s : %d - r = %d -", le->link_src, le->zone_radius);
+		lsinfo_entry *lse = le->lslisthead.lh_first;
+		for (; lse; lse=lse->lsinfo_link.le_next) {
+			printf("[ sid : %d -", lse->lst_id);
+			ls_info_entry *lsie = lse->ls_info.lh_first;
+			for (; lsie; lsie = lsie->ls_info_link.le_next) {
+				printf("-( d : %d - msk : %d - frwd : %d )-", lsie->link_dst, lsie->link_subnet, lsie->forwarded);
+			}
+			printf("- ]");
+		}
+		printf(" } ");
+	}
+	printf(" -- done \n");
 }
