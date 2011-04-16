@@ -494,6 +494,19 @@ ZRP::sendHello() {
 	Scheduler::instance().schedule(target_, p, 0.0);
 }
 
+void
+ZRP::recvBRP(Packet *pkt)
+{
+	Packet *p = Packet::alloc();
+	struct hdr_cm *ch = HDR_CMN(p);
+	struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_zrp *zr = HDR_ZRP(p);
+	struct hdr_zrp_brp *rh = HDR_ZRP_BRP(pkt);
+	struct hdr_zrp_query *rk = HDR_ZRP_QUERY(p);
+
+	*rk = *(rh->hdr_zrp_query);
+	recvQuery(p);
+}
 
 void
 ZRP::recvHello(Packet *p) {
