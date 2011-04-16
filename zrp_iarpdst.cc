@@ -25,11 +25,16 @@ zrp_lstable::lst_insert(nsaddr_t link_src, nsaddr_t link_dst, nsaddr_t subnet_ma
 	assert(le);
 
 	std::vector<lsinfo_entry>::iterator it;
+	std::vector<ls_subentry>::iterator ii;
 	bool inserted = FALSE;
 	for (it=le->lsinfo.begin(); it!=le->lsinfo.end(); ++it) {
-		if ((*it).lst_id = state_id) {
+		for (ii = (*it).ls_info.begin(); ii != (*it).ls_info.end(); ++ii) {
+
+		if ((*ii).link_dst == link_dst) {
 			inserted = TRUE;
 			break;
+		}
+
 		}
 	}
 
@@ -40,7 +45,7 @@ zrp_lstable::lst_insert(nsaddr_t link_src, nsaddr_t link_dst, nsaddr_t subnet_ma
 	sb->link_subnet = 0;
 	if (inserted) {
 
-		(*it).ls_info.push_back(*sb);
+//		(*it).ls_info.push_back(*sb);
 	}
 	else {
 		lsinfo_entry *lse = new lsinfo_entry;

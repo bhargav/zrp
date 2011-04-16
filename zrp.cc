@@ -44,7 +44,8 @@ ZRP::command(int argc, const char*const* argv) {
 
 			//	#ifndef AODV_LINK_LAYER_DETECTION
 			htimer.handle((Event*) 0);
-			qtimer.handle((Event*) 0);
+			ztimer.handle((Event*) 0);
+			//			qtimer.handle((Event*) 0);
 			ntimer.handle((Event*) 0);
 			//	#endif // LINK LAYER DETECTION
 
@@ -113,6 +114,14 @@ ZrpQueryTimer::handle(Event*) {
 }
 
 void
+ZoneManagementTimer::handle(Event*) {
+	agent->updateRT();
+	double interval = 5.0;
+	assert(interval >= 0);
+	Scheduler::instance().schedule(this, &intr, interval);
+}
+
+void
 ZrpNeighborTimer::handle(Event*) {
 	agent->nb_purge();
 	Scheduler::instance().schedule(this, &intr, 5 * HELLO_INTERVAL * Random::uniform());
@@ -121,8 +130,7 @@ ZrpNeighborTimer::handle(Event*) {
 /*
  * Constructor for ZRP class
  */
-ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),qtimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones(),tempqc() {					// Need to assign a number from packet.h
-	//	bind("zone_radius", (int64_t *) &zone_radius);
+ZRP::ZRP(nsaddr_t id) : Agent(PT_ZRP),ntimer(this),htimer(this),ztimer(this),rtable(),lktable(),pending_lst_list(),new_neighbour_list(),former_routing_zones(),tempqc() {					// Need to assign a number from packet.h
 	index = id;
 	seqno = 2;										// From AODV need rationale
 	zone_radius = 2;
@@ -455,7 +463,7 @@ ZRP::sendLinkState(nsaddr_t link_src, nsaddr_t link_dst, u_int16_t state_id, u_i
 
 	zrph->ah_type = ZRPTYPE_LINKSTATE;
 
-	Scheduler::instance().schedule(target_, p, 0.);
+	Scheduler::instance().schedule(target_, p, JITTER);
 
 }
 
@@ -618,6 +626,8 @@ ZRP::recvHello(Packet *p) {
 		nb->nb_expire = CURRENT_TIME + ALLOWED_NEIGHBOR_LOSS;
 	}
 
+	rt_dump();
+
 	Packet::free(p);
 }
 
@@ -725,8 +735,8 @@ void ZRP::neighborFound(nsaddr_t id)
 
 	rt_dump();
 
-	//	bool fl[8] = {0,0,0,0,1,0,0,0};
-	//	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP,IP_BROADCAST);
+	bool fl[8] = {0,0,0,0,1,0,0,0};
+	sendLinkState(index,id,my_state_id,zone_radius, fl, NULL, ZRP_UP,IP_BROADCAST);
 
 
 	updateIntraRoutingTable(NULL, id, 0, ZRP_UP);
@@ -775,14 +785,124 @@ ZRP::rt_dump()
 	zrp_rt_entry *rt = rtable.head();
 	for (; rt; rt=rt->rt_link.le_next) {
 		printf(" [ d:%d inzone:%d r: ", rt->zrp_dst, rt->zrp_intrazone);
-		std::vector<nsaddr_t>::reverse_iterator rii;
-		for(rii=rt->route.rbegin(); rii!=rt->route.rend(); ++rii)  {
+		std::vector<nsaddr_t>::iterator rii;
+		for(rii=rt->route.begin(); rii!=rt->route.end(); ++rii)  {
 			printf("%d - ", *rii);
 		}
 		printf(" ]");
 	}
 	printf(" -- done \n");
 }
+
+void
+ZRP::updateRT() {
+	bool rebuild = TRUE;
+	std::vector<nsaddr_t> temp;
+	std::vector<nsaddr_t>::iterator iter;
+	std::vector<zrp_lst_entry*>::iterator lsmit;
+	std::vector<lsinfo_entry>::iterator initer;
+	std::vector<ls_subentry>::iterator sbit;
+
+	zrp_rt_entry *rtentry = rtable.head();
+
+	while(rebuild) {
+
+		// Remove entries for IntraZone Nodes
+		for (; rtentry; rtentry = rtentry->rt_link.le_next) {
+			if (rtentry->zrp_intrazone)
+				temp.push_back(rtentry->zrp_dst);
+		}
+
+		for (iter = temp.begin(); iter != temp.end(); ++iter) {
+			rtable.rt_delete((*iter));
+		}
+
+		// Assuming all links in LST are UP links only and DOWN links have been removed
+		zrp_rt_entry *rt;
+
+		//		std::vector<nsaddr_t> nodes;
+		//		for (lsmit = lktable.lshead.begin(); lsmit != lktable.lshead.end(); ++lsmit) {
+		//			if ((*lsmit)->link_src == index) {
+		//				for (initer = (*lsmit)->lsinfo.begin(); initer != (*lsmit)->lsinfo.end(); ++initer) {
+		//					for (sbit = (*initer).ls_info.begin(); sbit != (*initer).ls_info.end(); ++sbit) {
+		//						if ((*sbit).link_status) {
+		//							nodes.push_back((*sbit).link_dst);
+		//
+		//							rt = rtable.rt_add((*sbit).link_dst);
+		//							rt->zrp_intrazone = TRUE;					// Assuming Zone_Radius >= 1 (i.e. atleast neighbors are in the zone)
+		//							rt->route.empty();
+		//							rt->route.push_back((*sbit).link_dst);
+		//						}
+		//					}
+		//				}
+		//			}
+		//		}
+
+		// Recompute entries for IntraZone Nodes in Routing Table
+		std::vector<nsaddr_t>::iterator rii;
+		std::vector<nsaddr_t> nodes_new;
+		std::vector<nsaddr_t> level;
+		level.push_back(index);
+		int i = 1;
+		bool belongs = FALSE;
+		zrp_rt_entry *rtemp;
+
+		// Compute Route to each node in LST from Link State Table
+		for (i = 1; i <= zone_radius; ++i) {
+			// Check is size of route is less than zone radius
+
+			nodes_new.empty();
+			for (lsmit = lktable.lshead.begin(); lsmit != lktable.lshead.end(); ++lsmit) {
+
+				belongs = FALSE;
+				for (rii = level.begin(); rii != level.end(); ++rii) {
+					if ((*lsmit)->link_src == (*rii)) {
+						belongs = TRUE;
+						level.erase(rii);
+						break;
+					}
+				}
+				if (belongs == TRUE) {
+					for (initer = (*lsmit)->lsinfo.begin(); initer != (*lsmit)->lsinfo.end(); ++initer) {
+						for (sbit = (*initer).ls_info.begin(); sbit != (*initer).ls_info.end(); ++sbit) {
+							//							rt = rtable.rt_lookup((*sbit).link_dst);
+							//							if (rt != 0) {
+							//								if (rt->zrp_intrazone == FALSE)
+							rtable.rt_delete((*sbit).link_dst);
+							//							}
+
+							if ((*sbit).link_dst != index) {
+								// Add to Routing Table as IntraZone
+								//								rt = rtable.rt_lookup((*sbit).link_dst);
+								//								if (rt == 0) {
+								rt = rtable.rt_add((*sbit).link_dst);
+								rt->zrp_intrazone = TRUE;
+								rt->route.empty();
+								rtemp = rtable.rt_lookup((*lsmit)->link_src);
+								if (rtemp) {
+									rt->route = rtemp->route;
+								}
+								if (rt->route.size() > 0) {
+									if (rt->route.at(0) == (*sbit).link_dst)
+										rt->route.empty();
+								}
+								rt->route.push_back((*sbit).link_dst);
+								nodes_new.push_back(rt->zrp_dst);
+							}
+						}
+					}
+				}
+			}
+
+			level.empty();
+			level = nodes_new;
+		}
+		rebuild = FALSE; // Update Link State Tables
+	}
+
+}
+
+
 
 void
 ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool ifneigh_status) {
@@ -852,7 +972,7 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 			else {
 				new_neighbour_list.nl_delete(link_dest);
 			}
-			my_state_id++;
+			//			my_state_id++;
 		}
 	}
 
@@ -869,62 +989,7 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 		}
 
 		// Rebuild Routing Table
-		bool rebuild = TRUE;
-		std::vector<nsaddr_t> temp;
-		std::vector<nsaddr_t>::iterator iter;
-		std::vector<zrp_lst_entry*>::iterator lsmit;
-		std::vector<lsinfo_entry>::iterator initer;
-		std::vector<ls_subentry>::iterator sbit;
-
-		while(rebuild) {
-
-			// Remove entries for IntraZone Nodes
-			for (; rtentry; rtentry = rtentry->rt_link.le_next) {
-				if (rtentry->zrp_intrazone)
-					temp.push_back(rtentry->zrp_dst);
-			}
-
-			for (iter = temp.begin(); iter != temp.end(); ++iter) {
-				rtable.rt_delete((*iter));
-			}
-
-			// Assuming all links in LST are UP links only and DOWN links have been removed
-			zrp_rt_entry *rt;
-
-			std::vector<nsaddr_t> nodes;
-			for (lsmit = lktable.lshead.begin(); lsmit != lktable.lshead.end(); ++lsmit) {
-				if ((*lsmit)->link_src == index) {
-					for (initer = (*lsmit)->lsinfo.begin(); initer != (*lsmit)->lsinfo.end(); ++initer) {
-						for (sbit = (*initer).ls_info.begin(); sbit != (*initer).ls_info.end(); ++sbit) {
-							if ((*sbit).link_status) {
-								nodes.push_back((*sbit).link_dst);
-
-								rt = rtable.rt_add((*sbit).link_dst);
-								rt->zrp_intrazone = TRUE;					// Assuming Zone_Radius >= 1 (i.e. atleast neighbors are in the zone)
-								rt->route.push_back((*sbit).link_dst);
-							}
-						}
-					}
-				}
-			}
-
-			// Recompute entries for IntraZone Nodes in Routing Table
-			std::vector<nsaddr_t>::iterator ii;
-			std::vector<nsaddr_t> nodes_new;
-			std::vector<nsaddr_t> level;
-			level.push_back(index);
-			int i = 1;
-
-			for (lsmit = lktable.lshead.begin(); lsmit != lktable.lshead.end(); ++lsmit) {
-				// Compute Route to each node in LST from Link State Table
-
-				// Check is size of route is less than zone radius
-
-				// Add to Routing Table as IntraZone
-			}
-
-			rebuild = FALSE; // Update Link State Tables
-		}
+		updateRT();
 	}
 
 	// Construct Bordercast Tree -- BANNED
@@ -946,12 +1011,13 @@ ZRP::updateIntraRoutingTable(Packet *pkt, nsaddr_t link_dest, bool mask, bool if
 				nle = new_neighbour_list.head();
 				for (; nle; nle = nle->nl_link.le_next) {
 					bool flg[8] = {0, 0,0,0,(*it).link_status,0,0,0};
-					sendLinkState((*mit)->link_src, (*it).link_dst, (*lsitr).lst_id, (*mit)->zone_radius, flg, 0, (*it).link_status, nle->node);
+					if (pkt == 0)
+						sendLinkState((*mit)->link_src, (*it).link_dst, (*lsitr).lst_id, (*mit)->zone_radius, flg, 0, (*it).link_status, nle->node);
 				}
 				// Done
 
 				// Broadcast Previously unforwarded link state entries
-				if ((*it).forwarded = FALSE) {
+				if ((*it).forwarded == FALSE) {
 					bool flg[8] = {0, 0, 0, 0, (*it).link_status, 0, 0, 0};
 					sendLinkState((*mit)->link_src, (*it).link_dst, (*lsitr).lst_id, (*mit)->zone_radius, flg, 0, (*it).link_status, IP_BROADCAST);
 				}

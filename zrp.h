@@ -27,6 +27,7 @@ class ZRP;						// Forward Declaration
 #define ZRP_DOWN				0
 #define ZRP_UPDATE_IN_PROGRESS  1
 #define ZRP_UPDATE_COMPLETE		0
+#define JITTER 					0.01*Random::uniform()
 
 class ZrpHelloTimer : public Handler {
 public:
@@ -119,6 +120,7 @@ protected:
 	// Routing Table
 	zrp_rtable			rtable;				// Routing Table
 	void				updateIntraRoutingTable(Packet*, nsaddr_t, bool, bool);
+	void				updateRT();
 
 
 	void 				rt_dump();			// Print the routing table for the present node
@@ -139,7 +141,8 @@ protected:
 	// Timer Management
 	ZrpHelloTimer      	htimer;				// Hello Timer
 	ZrpNeighborTimer   	ntimer;				// Neighbor Table Management Timer
-	ZrpQueryTimer		qtimer;
+//	ZrpQueryTimer		qtimer;
+	ZoneManagementTimer ztimer;
 
 	// logging the contents of the routing databases
 	Trace 				*logtarget;
