@@ -108,6 +108,7 @@ protected:
 	void				sendQueryExtension(nsaddr_t);
 	void				sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,u_int32_t rpseq, double timestamp,nsaddr_t*);
 	void				sendHello();
+	void				sendBRP(Packet *);
 
 	// Packet Reception Routines
 	void 				recvZRP(Packet *p);
@@ -116,6 +117,7 @@ protected:
 	void				recvQuery(Packet *p);
 	void				recvReply(Packet *p);
 	void 				recvExtension(Packet *p);
+	void				recvBRP(Packet *p);
 
 	// Routing Table
 	zrp_rtable			rtable;				// Routing Table

@@ -93,6 +93,7 @@ struct hdr_zrp_linkstate {
 };
 
 struct hdr_zrp_brp {
+	nsaddr_t			des_addr;
 	nsaddr_t			src_addr;
 	u_int16_t			msg_id;
 	u_int8_t			reserved[2];
@@ -100,6 +101,8 @@ struct hdr_zrp_brp {
 	hdr_zrp_query		encapsulated_pkt_hdr;
 
 	double				brp_timestamp;
+
+
 
 	inline int size() {
 				int sz = 0;
